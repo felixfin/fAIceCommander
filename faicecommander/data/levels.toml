@@ -1,0 +1,12 @@
+# Level numbers. Behaviour lives in faicecommander/game/levels/level_XX_*.py.
+
+[level_01]
+name = "Asteroid Belt"
+duration_s = 90
+asteroid_count = 3            # always this many category 1 asteroids
+asteroid_size_px = [10, 30]   # width
+asteroid_speed_px = [30, 140] # own speed, on top of the scroll
+asteroid_spread_deg = 55      # random direction around "straight down"
+damage_percent = 25
+score_per_kill = 100
+score_per_second = 10

@@ -1,0 +1,48 @@
+# fAIceCommander 3D - global settings. Distances are given in "px" like in the 2D original;
+# world.px_per_unit converts them to 3D world units.
+
+[display]
+fullscreen = true
+window_size = [1600, 900]   # used when not fullscreen
+panel_height = 0.24         # webcam panel, fraction of the window height (F2 hides it)
+bloom = true
+
+[camera]
+index = 0
+width = 640
+height = 480
+fps = 30
+
+[controls]
+tilt_deadzone_deg = 4.0     # head roll below this is ignored
+tilt_full_deg = 22.0        # head roll for full sideways speed
+turn_threshold = 0.38       # normalized nose offset that switches the weapon
+turn_rearm = 0.18           # must come back below this before the next switch
+turn_lockout_s = 0.6
+mouth_open_ratio = 0.55     # 0 = calibrated closed mouth, 1 = calibrated wide open
+mouth_close_ratio = 0.35    # hysteresis: mouth counts as closed again below this
+eyes_closed_ratio = 0.6     # 0 = calibrated open eyes, 1 = calibrated closed eyes
+face_lost_pause_s = 1.5     # the game pauses when no face is seen for this long
+
+[world]
+px_per_unit = 20.0
+field_half_width_px = 300   # ship movement and spawn area
+scroll_speed_px = 120       # constant forward thrust
+ship_max_speed_px = 340     # sideways speed at full head tilt
+ship_scale = 0.6
+ship_radius_px = 22
+
+[ship]
+hull_regen_per_s = 1.0       # percent per second
+energy_regen_per_s = 12.0    # percent per second
+energy_regen_delay_s = 0.5   # after the last weapon use
+shield_damage_factor = 0.4   # shield reduces collision damage by 60 %
+
+[weapons.laser]
+energy_cost = 4.0            # percent per pulse
+speed_px = 900
+min_interval_s = 0.12
+damage = 1
+
+[weapons.shield]
+energy_per_s = 10.0
