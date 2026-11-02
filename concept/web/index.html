@@ -1,0 +1,325 @@
+<title>fAIceCommander 3D Konzept</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column (~70ch) with full-bleed image bands; a cockpit-HUD look, single dark theme by choice */
+:root {
+  --bg: #0b0a13;
+  --panel: #14121f;
+  --line: #2a2640;
+  --fg: #e7e5f2;
+  --muted: #9a95b5;
+  --human: #52d6ff;   /* FaceCommander / UI */
+  --cat: #ff4fc3;     /* Catliens */
+  --laser: #a8ff3a;   /* laser green, from the 2D original */
+  --warn: #ffb347;
+  --f-display: "Chakra Petch", "Bahnschrift", "Segoe UI", sans-serif;
+  --f-body: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 17px/1.6 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+.col { max-width: 72ch; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.4rem, 6vw, 4.2rem); letter-spacing: 0.01em; }
+h1 .ai { color: var(--cat); }
+h1 .d3 { color: var(--human); font-size: 0.55em; vertical-align: 0.55em; margin-left: 0.2em; }
+h2 { font-size: clamp(1.6rem, 3.2vw, 2.1rem); margin-bottom: 14px; }
+h3 { font-size: 1.15rem; margin: 22px 0 8px; color: var(--human); }
+p { margin: 0 0 14px; }
+a { color: var(--human); }
+.eyebrow { font: 600 0.78rem/1 var(--f-mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--cat); margin-bottom: 10px; }
+section { padding-block: 56px 8px; border-top: 1px solid var(--line); }
+header { padding-block: 48px 24px; display: grid; gap: 18px; }
+.lede { font-size: 1.2rem; color: var(--muted); max-width: 62ch; }
+.hero-img { width: 100%; border: 1px solid var(--line); display: block; }
+figure { margin: 0; }
+figcaption { font: 400 0.85rem/1.4 var(--f-mono); color: var(--muted); padding-top: 8px; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 22px; margin-top: 18px; }
+.grid2 img { width: 100%; display: block; border: 1px solid var(--line); }
+.tablewrap { overflow-x: auto; margin: 10px 0 18px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; min-width: 560px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 0.75rem/1.3 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.tag { display: inline-block; font: 600 0.72rem/1 var(--f-mono); padding: 4px 7px; border: 1px solid currentColor; letter-spacing: 0.05em; }
+.t-h { color: var(--human); } .t-c { color: var(--cat); } .t-l { color: var(--laser); } .t-w { color: var(--warn); }
+.note { border-left: 3px solid var(--warn); background: var(--panel); padding: 12px 16px; margin: 14px 0 20px; }
+.note strong { color: var(--warn); }
+.player { background: var(--panel); border: 1px solid var(--line); padding: 18px; margin: 18px 0; display: grid; gap: 14px; }
+.player audio { width: 100%; }
+.sections { display: flex; flex-wrap: wrap; gap: 10px; }
+.sections button {
+  font: 600 0.85rem/1 var(--f-mono); color: var(--fg); background: transparent; border: 1px solid var(--line);
+  padding: 10px 12px; cursor: pointer; display: grid; gap: 5px; text-align: left;
+}
+.sections button span { color: var(--muted); font-weight: 400; font-size: 0.75rem; }
+.sections button:hover, .sections button:focus-visible { border-color: var(--human); outline: none; }
+.sections button.on { border-color: var(--cat); }
+ol.q { padding-left: 1.4em; display: grid; gap: 14px; }
+ol.q li::marker { font-family: var(--f-mono); color: var(--cat); font-weight: 600; }
+ol.q .def { display: block; color: var(--muted); font-size: 0.93rem; }
+ol.q .def b { color: var(--laser); font-weight: 600; }
+.story { display: grid; gap: 0; counter-reset: s; margin: 10px 0; }
+.story div { display: grid; grid-template-columns: 70px 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.story time { font: 600 0.85rem/1.6 var(--f-mono); color: var(--cat); }
+.final { font-family: var(--f-display); font-size: clamp(1.3rem, 3vw, 1.8rem); color: var(--human); padding: 18px 0 4px; }
+pre { font: 400 0.85rem/1.5 var(--f-mono); background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; }
+svg text { font-family: var(--f-mono); }
+@media (prefers-reduced-motion: no-preference) { .sections button { transition: border-color .15s; } }
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Konzept · Stand 2. November 2026 · vor Implementierungsbeginn</div>
+  <h1>f<span class="ai">AI</span>ceCommander<span class="d3">3D</span></h1>
+  <p class="lede">Der Gesichtsgesten-Shooter von damals, neu gebaut als Python-Desktopspiel: echte 3D-Grafik im Retro-Low-Poly-Stil, sieben Level bis zum Catlien-Mutterschiff, adaptive Drum-&amp;-Bass-Musik und ein AR-Helm mit offenem Hirn über deinem Webcam-Bild.</p>
+  <figure>
+    <img class="hero-img" src="img/10_ingame_level1.webp" alt="Ingame-Mockup Level 1: Raumschiff schießt grüne Laser auf Asteroiden, Explosion mit Schockwellenring, darunter Webcam-Panel mit AR-Helm und Steuerungsanzeigen" width="1280" height="970">
+    <figcaption>Ingame-Mockup Level 1. Die 3D-Szene ist echte Panda3D-Ausgabe der prozeduralen Modelle; HUD und Webcam-Panel sind für das Mockup nachträglich montiert (Webcam-Ausschnitt aus deinem alten Screenshot).</figcaption>
+  </figure>
+</header>
+
+<section>
+  <div class="eyebrow">Entscheidung</div>
+  <h2>Technik: Python + Panda3D + MediaPipe</h2>
+  <div class="col">
+    <p>Python passt gut: Die rechenintensiven Teile laufen ohnehin in C++ (Panda3D-Renderer, MediaPipe-Inferenz), die Spiellogik selbst ist leichtgewichtig. Eine Alternative wäre Godot (MIT) mit C#; dort ist aber die Gesichtserkennung deutlich umständlicher anzubinden. Ich empfehle Python.</p>
+    <p>Alle Bilder auf dieser Seite habe ich bereits mit Panda3D auf deinem Rechner gerendert. Die Engine läuft also, und die Modelle sind direkt im Spiel wiederverwendbar.</p>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Baustein</th><th>Bibliothek</th><th>Lizenz</th><th>Aufgabe</th></tr></thead>
+    <tbody>
+      <tr><td>3D-Engine</td><td>Panda3D 1.10</td><td><span class="tag t-l">BSD-3</span></td><td>Rendering, Szenengraph, Shader (Bloom), GUI, Audio-Wiedergabe, Packaging zur .exe (build_apps)</td></tr>
+      <tr><td>Gesicht</td><td>MediaPipe FaceLandmarker</td><td><span class="tag t-l">Apache 2.0</span></td><td>478 Landmarken, 52 Blendshapes (<code>jawOpen</code>, <code>eyeBlinkLeft/Right</code>) und eine Kopf-Transformationsmatrix (Neigen/Drehen/Nicken)</td></tr>
+      <tr><td>Webcam</td><td>opencv-python</td><td><span class="tag t-l">Apache 2.0</span></td><td>Kamerabild holen, spiegeln</td></tr>
+      <tr><td>Audio-Synthese</td><td>numpy, scipy</td><td><span class="tag t-l">BSD</span></td><td>Musik-Stems und Soundeffekte werden im Code erzeugt, keine fremden Samples</td></tr>
+      <tr><td>Schriften</td><td>z. B. Chakra Petch, Orbitron</td><td><span class="tag t-l">OFL</span></td><td>darf ins Spiel eingebettet werden</td></tr>
+      <tr><td>Sprachausgabe (optional)</td><td>Piper TTS, deutsche Stimme „Thorsten“</td><td><span class="tag t-l">MIT / CC0</span></td><td>Intro-Erzähler einmalig offline erzeugt, als WAV ausgeliefert</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note col"><strong>Lizenzhinweis.</strong> Die Panda3D-Wheels enthalten OpenAL Soft, und die OpenCV-Wheels enthalten FFmpeg; beide stehen unter LGPL und sind dynamisch gelinkt. Das erzwingt keine Offenlegung deines Codes. Alle Grafiken, Musik und Sounds entstehen prozedural im Projekt selbst, es gibt also keine Asset-Lizenzen.</div>
+</section>
+
+<section>
+  <div class="eyebrow">Kernidee</div>
+  <h2>Steuerung in 3D per Gesicht</h2>
+  <div class="col">
+    <p>Meine Empfehlung ist <strong>2,5D</strong>: Die Grafik ist vollständig 3D, die Kamera schaut schräg von hinten oben über das Schiff. Gespielt wird aber auf einer Ebene, genau wie beim robusten 2D-Vorgänger. Gründe:</p>
+    <ul>
+      <li>Kopfneigen und Kopfdrehen sind schon belegt. Für eine dritte Achse bliebe nur das Nicken, und das ist das unruhigste Signal (beim Mundöffnen nickt man unwillkürlich mit).</li>
+      <li>Deine Level-Regeln sind in Bildschirm-Pixeln formuliert („oben am Bildschirm“, „10–30 px“). Ich übernehme das 1:1 als logisches 2D-Koordinatensystem, auf das die 3D-Szene abgebildet wird. So bleibt jede Regel exakt umsetzbar.</li>
+      <li>Kollisionen auf der Ebene sind fair und vorhersehbar. Die Tiefe gibt es trotzdem: Objekte kommen aus dem Raum auf dich zu, das Schiff legt sich in die Kurve, Explosionsringe breiten sich perspektivisch aus.</li>
+    </ul>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Geste</th><th>Erkennung</th><th>Wirkung</th></tr></thead>
+    <tbody>
+      <tr><td>Kopf neigen links/rechts</td><td>Roll-Winkel aus der Transformationsmatrix, Totzone ±4°, geglättet (One-Euro-Filter)</td><td>Schiff gleitet nach links/rechts. <b>Analog:</b> je stärker die Neigung, desto schneller; das Schiff legt sich sichtbar in die Kurve</td></tr>
+      <tr><td>Kopf drehen links/rechts</td><td>Yaw-Winkel über Schwelle (±18°) mit Hysterese und 0,6 s Sperre</td><td>vorherige / nächste Waffe im Waffenrad</td></tr>
+      <tr><td>Mund öffnen</td><td>Blendshape <code>jawOpen</code>, Schwelle aus der Kalibrierung</td><td>Laser: Dauerfeuer, solange offen (max. 4 Schuss/s) · Strahl: aktiv, solange offen · Atomrakete: 1 Rakete pro Öffnen · Schild: an/aus umschalten</td></tr>
+      <tr><td>Augen schließen <span class="tag t-c">neu</span></td><td>Blendshapes <code>eyeBlinkLeft</code> + <code>eyeBlinkRight</code>, pro Spieler kalibriert (funktioniert auch mit Brille)</td><td>Schutz vor Hypno-Pulsen (Level 3 und 7)</td></tr>
+      <tr><td>Nicken <span class="tag t-w">optional</span></td><td>Pitch-Winkel</td><td>vor/zurück auf der Ebene; standardmäßig aus, im Optionsmenü zuschaltbar</td></tr>
+    </tbody>
+  </table></div>
+  <div class="col">
+    <p>Vor dem ersten Level gibt es eine 5-Sekunden-Kalibrierung: neutral schauen, einmal Mund auf, einmal Augen zu. Daraus ergeben sich Nullpunkt und Schwellen für deine Kamera und dein Gesicht. Für Entwicklung und Tests gibt es zusätzlich eine Tastatursteuerung.</p>
+  </div>
+  <div class="tablewrap">
+    <svg viewBox="0 0 900 250" width="900" height="250" role="img" aria-label="Seitenansicht: Kamera schräg hinter und über dem Schiff blickt auf die Spielebene; Objekte kommen von hinten aus dem Raum">
+      <rect x="0" y="0" width="900" height="250" fill="#14121f"/>
+      <line x1="60" y1="190" x2="860" y2="190" stroke="#52d6ff" stroke-width="2"/>
+      <text x="860" y="214" fill="#9a95b5" font-size="13" text-anchor="end">Spielebene (logisch 2D, Kollisionen hier)</text>
+      <circle cx="110" cy="70" r="12" fill="none" stroke="#e7e5f2" stroke-width="2"/>
+      <text x="110" y="45" fill="#e7e5f2" font-size="13" text-anchor="middle">Kamera</text>
+      <line x1="120" y1="78" x2="520" y2="190" stroke="#e7e5f2" stroke-dasharray="5 5"/>
+      <line x1="120" y1="78" x2="860" y2="150" stroke="#e7e5f2" stroke-dasharray="5 5"/>
+      <polygon points="230,190 290,182 300,190" fill="#ff7a3c"/>
+      <text x="262" y="214" fill="#ff7a3c" font-size="13" text-anchor="middle">Schiff (unten im Bild)</text>
+      <circle cx="560" cy="180" r="10" fill="#8a7f72"/>
+      <circle cx="700" cy="176" r="14" fill="#8a7f72"/>
+      <rect x="770" y="160" width="70" height="30" fill="#3a2350" stroke="#ff4fc3"/>
+      <text x="700" y="140" fill="#9a95b5" font-size="13" text-anchor="middle">Asteroiden, Gegner, Boss (oben im Bild)</text>
+      <path d="M 640 120 Q 470 100 330 165" fill="none" stroke="#a8ff3a" stroke-width="2" marker-end="url(#a)"/>
+      <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#a8ff3a"/></marker></defs>
+      <text x="470" y="96" fill="#a8ff3a" font-size="13" text-anchor="middle">kommen auf dich zu</text>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Grafik</div>
+  <h2>Modelle und Effekte</h2>
+  <div class="col"><p>Low-Poly mit harter Flächenschattierung, Neon-Kanten, Bloom und leichten Scanlines: retro, aber sauber. Alles wird prozedural im Code erzeugt. Menschliche Technik ist zusammengeflickt und rostig, die Catliens sind violett mit pinken Neonkanten und grünen Katzen-Schlitzaugen.</p></div>
+  <div class="grid2">
+    <figure><img src="img/01_ship.webp" alt="Das FaceCommander-Raumschiff mit Glaskuppel und Gehirn" width="1280" height="720" loading="lazy"><figcaption>FaceCommander. Rechter Flügel orange als Gruß an das 2D-Original, linker Flügel aus einem anderen Wrack. Unter der Kuppel: James' Gehirn.</figcaption></figure>
+    <figure><img src="img/02_asteroids.webp" alt="Asteroiden Kategorie 1 und 2" width="1280" height="720" loading="lazy"><figcaption>Asteroiden. Kategorie 2 zeigt glühende Bruchlinien: Hier zerbricht er in bis zu drei Kategorie-1-Brocken.</figcaption></figure>
+    <figure><img src="img/03_catlien_fighter.webp" alt="Catlien-Jäger in Katzenkopfform" width="1280" height="720" loading="lazy"><figcaption>Catlien-Jäger (Level 5). Von oben gesehen ein Katzengesicht; die Schnurrhaare sind Antennen, aus dem „Maul“ wird geschossen.</figcaption></figure>
+    <figure><img src="img/04_mothership.webp" alt="Catlien-Mutterschiff" width="1280" height="720" loading="lazy"><figcaption>Mutterschiff (Level 7). In der Mitte die leuchtende Thronkammer der Mutter.</figcaption></figure>
+    <figure><img src="img/05_mothership_zones.webp" alt="Trefferzonen des Mutterschiffs von oben" width="1280" height="720" loading="lazy"><figcaption>Trefferzonen genau nach Vorgabe: 30 / 15 / 10 / 15 / 30 % der Breite. Zone 3 ist die Thronkammer.</figcaption></figure>
+    <figure><img src="img/06_boltzmann_brain.webp" alt="Boltzmann-Gehirn mit Neuronenfunken" width="1280" height="720" loading="lazy"><figcaption>Boltzmann-Gehirn (Level 4). Materialisiert sich mit Funkenregen aus dem Nichts und zerfällt nach 1–3 s.</figcaption></figure>
+    <figure><img src="img/07_black_hole.webp" alt="Schwarzes Loch mit Akkretionsscheibe" width="1280" height="720" loading="lazy"><figcaption>Schwarzes Loch (Level 6, künstlich in Level 7). Je näher du kommst, desto tiefer und dumpfer wird die Musik.</figcaption></figure>
+    <figure><img src="img/08_explosion.webp" alt="Explosion in drei Phasen" width="1280" height="720" loading="lazy"><figcaption>Explosion in drei Phasen. Der Knall ertönt erst, wenn der Schockwellen-Ring dein Schiff erreicht.</figcaption></figure>
+  </div>
+  <h3>Level 7 im Mockup</h3>
+  <figure><img class="hero-img" src="img/11_ingame_level7.webp" alt="Ingame-Mockup Level 7: Mutterschiff oben, Hypno-Puls-Ringe in Regenbogenfarben, Schild um das Schiff, künstliches schwarzes Loch, Warnung Augen schließen" width="1280" height="970" loading="lazy"><figcaption>Bosskampf: Ein Hypno-Puls breitet sich vom Mutterschiff aus, rechts eine Schwarzes-Loch-Bombe, das Schiff mit aktivem Schild. Die Bossleiste zeigt die Energie der Mutter, die sich ständig regeneriert.</figcaption></figure>
+  <div class="note col"><strong>Lichtempfindlichkeit.</strong> Die Hypno-Pulse werden ohne schnelles Stroboskop umgesetzt (höchstens 3 Helligkeitswechsel pro Sekunde, keine großflächigen Rot-Blitze). Beim Start gibt es einen Epilepsie-Hinweis und eine Option „Reduzierte Effekte“.</div>
+</section>
+
+<section>
+  <div class="eyebrow">Webcam</div>
+  <h2>AR-Helm statt farbiger Punkte</h2>
+  <div class="grid2">
+    <figure><img src="img/09_helmet.webp" alt="AR-Helm mit Gehirn unter Glaskuppel, LED-Stirnband, Schläuchen und Halskragen, auf einem holografischen Kopf" width="1280" height="720" loading="lazy"><figcaption>Der Lebenserhaltungs-Helm aus der Story: Gehirn unter Glas, Stirnband mit Status-LEDs, Schläuche zu den Ohrmodulen, Halskragen.</figcaption></figure>
+    <div class="col">
+      <p>Der Helm ist ein 3D-Modell. MediaPipe liefert pro Webcam-Bild eine Transformationsmatrix des Kopfes; mit genau dieser Lage rendert Panda3D den Helm über das gespiegelte Kamerabild. Neigst oder drehst du den Kopf, dreht sich der Helm mit.</p>
+      <p>Das Gesicht selbst bleibt frei, damit du dich erkennst und die Mund- und Augenerkennung sichtbar bleibt. Die Status-LEDs am Stirnband zeigen live an, was erkannt wird: Mund offen, Augen zu, Waffenwechsel.</p>
+      <p>Das Webcam-Panel liegt wie beim Original unter dem Spielfeld, daneben Steuerungsanzeigen und der aktuelle Musiktitel.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Ablauf</div>
+  <h2>Die sieben Level</h2>
+  <div class="col"><p>Jedes Level ist ein „Sprung zum nächsten Stern“: James erinnert sich nur an den Weg von Stern zu Stern. Ein Fortschrittsbalken zeigt die Distanz bis zum nächsten Stern. Alle Zahlen stehen in einer Konfigurationsdatei und lassen sich ohne Code-Änderung nachjustieren.</p></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Level</th><th>Inhalt (nach deiner Vorgabe)</th><th>Ziel</th><th>Musik</th></tr></thead>
+    <tbody>
+      <tr><td>1 · Asteroidengürtel</td><td>immer 3 Asteroiden Kat. 1, 1 Treffer, 25 % Schaden</td><td>~90 s überleben</td><td>Liquid DnB, rollender Reese-Bass</td></tr>
+      <tr><td>2 · Trümmerfeld</td><td>4× Kat. 1 + 1× Kat. 2 (2 Treffer / 2 s Strahl / 1 Atomrakete, zerbricht), 50 % Schaden. Strahl und Atomraketen werden freigeschaltet</td><td>~90 s überleben</td><td>Jump-up DnB, mehr Bass</td></tr>
+      <tr><td>3 · Hypno-Nebel</td><td>1–2× Kat. 1, Hypno-Pulse mit 3 s Vorwarnung, 10 s Augen zu, Sonar piept Objekte vor dem Schiff an, offene Augen frieren das Schiff ein</td><td>~90 s überleben</td><td>mysteriös, sparsam; während des Pulses gedämpft, damit das Sonar hörbar ist</td></tr>
+      <tr><td>4 · Die Leere</td><td>nichts, keine Sterne; bis zu 10 Boltzmann-Gehirne (¼ Schiffsgröße, 1–3 s, nie direkt auf dem Schiff), 5 % Schaden</td><td>~60 s überleben</td><td>Dark Ambient, Herzschlag, Flüstern</td></tr>
+      <tr><td>5 · Patrouille</td><td>1–3× Kat. 1, 2 Catlien-Jäger (6 Laser / 4 s Strahl / 2 Atom), deren Schüsse 10 %</td><td>beide Jäger zerstören</td><td>Darksynth / Cyberpunk</td></tr>
+      <tr><td>6 · Ereignishorizont</td><td>wie Level 1, plus 0–1 Schwarzes Loch; Gegensteuern nötig, zu nah = Game Over</td><td>~90 s überleben</td><td>Halftime-Dubstep, Sub-Druck steigt mit der Nähe</td></tr>
+      <tr><td>7 · Die Mutter</td><td>Mutterschiff mit Schüssen (alle 4 s, 5 %), Schwarzes-Loch-Bombe (ca. alle 2 min, 5 %/s, 10 s), Hypno-Pulse (5–10 s, danach 10 s +50 % Verwundbarkeit), Energie-Regeneration, 3 Trefferzonen</td><td>Mutterschiff zerstören</td><td>episch: DnB und Dubstep im Wechsel, schneller unter 25 % Boss-Energie</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Waffen und Energie</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Waffe</th><th>Mund</th><th>Verbrauch (Vorschlag)</th><th>ab Level</th></tr></thead>
+    <tbody>
+      <tr><td><span class="t-l">Laser-Kanone</span></td><td>Dauerfeuer solange offen</td><td>4 % Energie pro Schuss</td><td>1</td></tr>
+      <tr><td><span class="t-h">Laserstrahl</span></td><td>aktiv solange offen</td><td>15 % Energie pro Sekunde</td><td>2</td></tr>
+      <tr><td><span class="t-c">Atomrakete</span></td><td>1 pro Öffnen</td><td>Munition: 3 pro Level, zusätzlich 30 % Energie</td><td>2</td></tr>
+      <tr><td><span class="t-h">Energieschild</span></td><td>an/aus umschalten</td><td>10 % pro Sekunde, reduziert Kollisionsschaden um 60 %</td><td>1</td></tr>
+    </tbody>
+  </table></div>
+  <div class="col"><p>Energie lädt sich mit 12 %/s auf, sobald 0,5 s keine Waffe aktiv ist. Die Hülle regeneriert langsam mit 1 %/s. Hülle bei 0 % oder vom Schwarzen Loch verschluckt bedeutet Game Over.</p></div>
+</section>
+
+<section>
+  <div class="eyebrow">Audio</div>
+  <h2>Adaptive Musik</h2>
+  <div class="col">
+    <p>Jeder Titel besteht aus mehreren Spuren (Drums, Bass, Arp, Pad, Spezialschicht), die das Spiel taktgenau ein- und ausblendet. Beispiele: Bei wenig Hülle kommt ein Herzschlag dazu und alles wird gedämpfter; nahe am Schwarzen Loch sinken Filter und Tonhöhe; bei Game Over gibt es einen Tape-Stop-Effekt. Die Spuren werden im Code synthetisiert und beim ersten Start einmal gerendert und zwischengespeichert.</p>
+    <p>Soundeffekte entstehen genauso: Laser-Zirpen, dumpfer Kollisionsschlag, Schild-Surren, Explosionen mit Verzögerung nach Entfernung, Sonar-Ping mit Stereo-Position, Warnsirene vor dem Hypno-Puls.</p>
+  </div>
+  <div class="player">
+    <div><strong>Kostprobe, 22 s, 174 BPM</strong> · komplett im Code erzeugt, ohne Samples. Sie zeigt drei Schichten hintereinander; im Spiel werden sie je nach Situation überblendet.</div>
+    <audio id="teaser" controls preload="metadata" src="audio/music_teaser.wav"></audio>
+    <div class="sections" role="group" aria-label="Zu Abschnitt springen">
+      <button type="button" id="s0" data-t="0">Die Leere<span>0:00 · Pad, Sonar, Riser</span></button>
+      <button type="button" id="s1" data-t="2.76">Level-Schicht<span>0:03 · DnB, Reese, Arp</span></button>
+      <button type="button" id="s2" data-t="13.79">Boss-Schicht<span>0:14 · Halftime-Wobble, Sirene</span></button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Intro</div>
+  <h2>Storyboard, ca. 80 Sekunden</h2>
+  <div class="col">
+    <p>Ich schlage vor, das Intro in Echtzeit in der Engine abzuspielen statt als fertige Videodatei. Dann kann die letzte Einstellung dein Live-Webcam-Bild mit dem Helm zeigen: Du wirst im Intro selbst zum FaceCommander. Überspringen geht mit Leertaste, Esc oder 2 s Mund offen. Optional kann ich zusätzlich eine MP4-Datei daraus rendern.</p>
+    <p>Die brutalen Teile der Vorgeschichte werden über Texttafeln und Silhouetten angedeutet, nicht explizit gezeigt. Das wirkt düsterer, als es zu zeigen.</p>
+  </div>
+  <div class="story col">
+    <div><time>0:00</time><span>Schwärze. Ein EKG piept. Tipptext: „Seit Jahrhunderten tobt der Krieg zwischen der Menschheit und den Catliens.“</span></div>
+    <div><time>0:08</time><span>Catlien-Schwärme ziehen über einen brennenden Planeten. Tiefe Drones, ferne Katzenschreie, elektronisch verzerrt.</span></div>
+    <div><time>0:18</time><span>Silhouetten von Menschen mit Halsbändern. Marken mit „MÄNNCHEN 4471“ und „WEIBCHEN 0932“. Text: Die meisten sind versklavt, Haustiere der höheren Kasten.</span></div>
+    <div><time>0:28</time><span>Das Mutterschiff. Auf dem Thron die Silhouette der Mutter, die den Schwarm lenkt.</span></div>
+    <div><time>0:36</time><span>Die Schlacht: Commander James Nathaniel Honors Flotte greift an, Explosion um Explosion. Das Mutterschiff wird getroffen, der Hyperantrieb fällt aus. Die Flotte ist verloren.</span></div>
+    <div><time>0:48</time><span>Eine Rettungskapsel treibt im All. KI-Chirurgen: „Nur Kopf und Teile des Oberkörpers konnten gerettet werden.“</span></div>
+    <div><time>0:56</time><span>Werft: Ein Schiff wird aus Wrackteilen zusammengeschweißt. Der Helm aus diesem Konzept senkt sich in die Apparatur.</span></div>
+    <div><time>1:06</time><span>Erwachen, verschwommener Blick. KI-Stimme: „Commander? Können Sie mich hören? Sie wissen nicht, wer Sie sind. Aber Sie kennen den Weg. Von Stern zu Stern.“</span></div>
+    <div><time>1:14</time><span>Das Webcam-Bild blendet ein, der Helm legt sich über dein Gesicht. Musik bricht ab, Stille.</span></div>
+  </div>
+  <p class="final">„FaceCommander – du bist unsere letzte Hoffnung.“</p>
+  <div class="col"><p>Danach Titelkarte, Kalibrierung, Level 1.</p></div>
+</section>
+
+<section>
+  <div class="eyebrow">Weiteres</div>
+  <h2>Highscore und Aufbau</h2>
+  <div class="col">
+    <p><strong>Highscore-Board:</strong> lokale Top 10 mit Name (Tastatur), Punkten, erreichtem Level und Datum, gespeichert im Benutzerprofil. Punkte gibt es für Abschüsse (Kat. 1: 100, Kat. 2: 250, Jäger: 1 000, Mutterschiff: 10 000), für Distanz und als Levelbonus für übrige Hülle.</p>
+    <p><strong>Architektur:</strong> Kamera und MediaPipe laufen in einem eigenen Thread mit 30 fps, das Spiel mit 60 fps. Die Logik ist 2D auf der Ebene, die 3D-Darstellung ist davon getrennt.</p>
+  </div>
+<pre>faicecommander/
+  main.py
+  core/      App, Zustände: Intro · Menü · Kalibrierung · Spiel · GameOver · Highscore · Sieg
+  input/     face_tracker.py (Thread), gestures.py (Kalibrierung, Filter, Hysterese), keyboard.py
+  game/      world, entities (Schiff, Asteroid, Jäger, Mutterschiff, Gehirn, Schwarzes Loch), weapons, levels/
+  render/    models.py (prozedural), effects.py, hud.py, webcam_view.py (AR-Helm)
+  audio/     synth.py, music.py (Stems, adaptiver Mixer), sfx.py, sonar.py
+  data/      config.toml, levels.toml, texts_de.toml
+  assets/    Schriften (OFL), face_landmarker.task</pre>
+  <h3>Meilensteine</h3>
+  <ol class="col">
+    <li>Grundgerüst: Gesichtssteuerung mit Kalibrierung, Level 1 spielbar, HUD, Webcam-Panel mit Helm</li>
+    <li>Waffen und Energie, Explosionen, Soundeffekte, Musik-Engine, Level 2</li>
+    <li>Level 3–6: Hypno-Puls und Sonar, Leere und Gehirne, Jäger, Schwarze Löcher</li>
+    <li>Level 7 (Boss), Intro, Highscore, Menüs</li>
+    <li>Feinschliff, Balancing, Windows-Build als .exe</li>
+  </ol>
+</section>
+
+<section>
+  <div class="eyebrow">Bitte beantworten</div>
+  <h2>Rückfragen</h2>
+  <div class="col"><p>Zu jeder Frage steht mein Vorschlag. Wenn er passt, reicht „ok“; sonst die Nummer und deine Antwort.</p></div>
+  <ol class="q col">
+    <li>Ist 2,5D (3D-Grafik, Spiel auf einer Ebene) in Ordnung?<span class="def">Vorschlag: <b>ja</b>, Nicken für vor/zurück als abschaltbare Option, standardmäßig aus.</span></li>
+    <li>Analoge Lenkung (stärker neigen = schneller) statt fester Geschwindigkeit?<span class="def">Vorschlag: <b>analog</b> mit Totzone.</span></li>
+    <li>Mundbelegung pro Waffe wie oben (Laser Dauerfeuer, Strahl halten, Rakete pro Öffnen, Schild umschalten)?<span class="def">Vorschlag: <b>so übernehmen</b>.</span></li>
+    <li>Atomraketen: begrenzte Munition plus Energie, freigeschaltet ab Level 2?<span class="def">Vorschlag: <b>3 Raketen pro Level</b>, Strahl ebenfalls ab Level 2.</span></li>
+    <li>Levelziele: Zeit/Distanz überleben in Level 1–4 und 6, Abschuss in Level 5 und 7? Und wie lang sollen die Überlebens-Level sein?<span class="def">Vorschlag: <b>ja, ca. 90 s</b> (Level 4: 60 s).</span></li>
+    <li>Nach Game Over: Neustart bei Level 1 oder Fortsetzen am Levelanfang?<span class="def">Vorschlag: <b>Arcade-Neustart bei Level 1</b> für den Highscore, dazu eine Levelauswahl zum Üben (ohne Highscore-Wertung).</span></li>
+    <li>Was passiert nach dem Sieg über die Mutter?<span class="def">Vorschlag: <b>Sieg-Sequenz, Highscore, danach Endlosmodus</b> mit steigender Schwierigkeit.</span></li>
+    <li>Intro in Echtzeit in der Engine (mit deinem Live-Webcam-Bild am Ende) oder als fertige MP4-Datei? Mit Sprecher?<span class="def">Vorschlag: <b>Engine</b>, Sprecher per Piper TTS (deutsch, offline, leicht roboterhaft gefiltert für die KI-Wissenschaftler). Alternativ nur Texttafeln oder deine eigene Aufnahme.</span></li>
+    <li>Spielsprache?<span class="def">Vorschlag: <b>Deutsch</b>; alle Texte liegen in einer Datei, Englisch lässt sich später ergänzen.</span></li>
+    <li>Darstellung von Versklavung, Kastration und Zwangsbefruchtung aus der Story?<span class="def">Vorschlag: <b>angedeutet</b> über Texttafeln und Silhouetten, nichts explizit.</span></li>
+    <li>Passen Grafikstil, Helm und Musikrichtung?<span class="def">Vorschlag: <b>so weitermachen</b>; sag mir gern, was mehr oder weniger sein soll (z. B. mehr Retro-Pixel, härterer Bass).</span></li>
+    <li>Sollen die Boltzmann-Gehirne abschießbar sein?<span class="def">Vorschlag: <b>ja</b>, 50 Punkte; ausweichen geht natürlich auch.</span></li>
+    <li>Welche Bildschirmauflösung, Fenster oder Vollbild?<span class="def">Vorschlag: <b>1280 × 970 im Fenster</b> (Spielfeld 1280 × 720 plus Webcam-Panel), Vollbild per F11, Webcam-Panel ausblendbar.</span></li>
+  </ol>
+</section>
+</div>
+
+<script>
+(() => {
+  const a = document.getElementById("teaser");
+  const btns = [...document.querySelectorAll(".sections button")];
+  btns.forEach(b => b.addEventListener("click", () => {
+    a.currentTime = parseFloat(b.dataset.t);
+    a.play().catch(() => {});
+  }));
+  a.addEventListener("timeupdate", () => {
+    let idx = 0;
+    btns.forEach((b, i) => { if (a.currentTime >= parseFloat(b.dataset.t)) idx = i; });
+    btns.forEach((b, i) => b.classList.toggle("on", i === idx && !a.paused));
+  });
+  a.addEventListener("pause", () => btns.forEach(b => b.classList.remove("on")));
+})();
+</script>
