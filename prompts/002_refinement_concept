@@ -1,0 +1,30 @@
+Das sieht schon sehr gut aus. Folgende Ergänzung bevor ich deine Fragen beantworte:
+
+Spielsprache und Entwicklungssprache sind Englisch. Bitte alles auf Englisch schreiben. Mit mir kannst du aber weiterhin auf Deutsch kommunizieren.
+
+Der abschließende Satz des Intros sollte also sein: "FaceCommander - you are our last hope!"
+
+Kannst du das Raumschiff etwas weniger wie einen gewöhnlichen Düsenjet aussehen lassen? Mehr wie ein Kasten, vielleicht etwas ähnlicher wie im 2D Spiel.
+
+Kannst du die Catlien Raumschiffe und das Mutterschiff etwas weniger katzenartig aussehen lassen? Schon noch die grobe Form einer Katze, aber nicht so übertrieben. Und bitte viel düsterer und alienartiger. Aber etwas abstrakter und eher wie ein gewöhnliches Kampfraumschiff. Aber schon noch etwas wie eine Katze.
+
+Zur Steuerung: Der Standard Laser sollte immer einen Impuls beim Öffnen des Mundes abfeuern. Der nächste Impuls soll erst kommen, wenn der Mund wieder geschlossen wurde und erneut geöffnet wird, usw.
+
+Macht es vielleicht Sinn, pro Level eine eigene Quelldatei anzulegen?
+
+Zu deinen Rückfragen:
+1. 2,5D ist OK
+2. Also das Raumschiff sollte über die Kopfneigung sich nur nach links oder rechts bewegen. Das kann gerne analog erfolgen. Aber die Neigung sollte nicht die vorwärtsschub des Raumschiffs beeinflussen. Dieser ist konstant (Schub wird nur bei Endgegnern gestoppt, z. B. beim Mutterschiff).
+3. Standardlaser: Nur beim Öffnen. Strahl: Strahl halten, solange Mund geöffnet und Energie da ist. Rakete: Pro Öffnen. Schild: Pro Öffnen aktivieren/deaktivieren
+4. 3 Raketen pro Level passt. Strahl ab Level 2
+5. passt
+6. Es sollte zwei Modi geben: Leicht: Neustart beim aktuellen Level. Schwer: Von Level 1 an wieder beginnen.
+7. Siegsequenz, denk dir eine Art Outro aus. Gerne danach Endlosmodus.
+8. Engine. Man wird selbst zum FaceCommander wie von dir vorgeschlagen. Gefällt mir!
+9. Englisch. Auch die Texte und Sprache: Alles Englisch.
+10. Ja, Silhouetten sollten schon sichtbar sein. Ansonsten gerne durch Texttafeln ergänzen.
+11. Grafikstil, Helm und Musikrichtung perfekt. Nur bitte meine gewünschten Änderungen zu Raumschiff, Catliens beachten. Vielleicht alles einen Ticken gruseliger. Eher wie bei Doom oder so. Aber nicht übertreiben.
+12. Ja, sollten sie. Sollte richtig schön eklig explodieren mit Blut und Hirnmasse auf dem Bildschirm, die dann wieder nach kurzer Zeit verschwinden.
+13.Vollbild wäre am coolsten. Bzw. wie von dir vorgeschlagen.
+
+Überarbeite die Grafiken wie von mir gefordert und passe das Konzept entsprechend an. Bitte nochmal zeigen, bevor du in die Implementierungsphase übergehst.
