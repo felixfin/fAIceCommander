@@ -84,7 +84,7 @@ svg text { font-family: var(--f-mono); }
 
 <div class="wrap">
 <header>
-  <div class="eyebrow">Concept · revision 3 (final) · 2 November 2026 · ready for implementation</div>
+  <div class="eyebrow">Concept · revision 4 · 2 November 2026 · ready for implementation</div>
   <h1>f<span class="ai">AI</span>ceCommander<span class="d3">3D</span></h1>
   <p class="lede">The face-gesture space shooter, rebuilt as a Python desktop game: real-time 3D in a grim retro low-poly style, seven levels to the Catlien mothership, adaptive drum &amp; bass, and a life-support helmet with an exposed brain laid over your webcam image.</p>
   <figure>
@@ -92,12 +92,15 @@ svg text { font-family: var(--f-mono); }
     <figcaption>In-game mockup, level 1. The 3D scene is real Panda3D output of the procedural models; HUD and webcam panel were composited for the mockup (webcam crop taken from your old screenshot).</figcaption>
   </figure>
   <div class="changes col">
-    <strong>Changed in revision 3</strong>
+    <strong>Changed in revision 4</strong>
     <ul>
-      <li>The ship has more detail: coolant hoses, a glowing life-support tank wired into the brain dome, an electronics rack with an LED matrix, radiator fins, cable bundles, a radar dish and antennas.</li>
-      <li>Catliens are less cat-like: no more ear-like fins or spires. The only hint left is the slanted slit sensors, and on the mothership the slit-pupil eye.</li>
-      <li>The webcam helmet now puts sunglasses over your eyes and a glowing cigar in the corner of your mouth.</li>
-      <li>All remaining questions are settled (see the end of the page).</li>
+      <li>Rounder, more realistic rendering: smooth shading instead of flat facets, per-pixel lighting with specular highlights, and colour gradients with grime and engine soot on every hull.</li>
+      <li>The FaceCommander ship is rebuilt from rounded hull sections instead of stacked blocks. It stays orange, now shaded from dark underside to sunlit top.</li>
+      <li>The Catliens fly real warships now, predatory and dark, with machinery-covered hulls like the Borg or the Klingons. The cats themselves sit inside: a pilot in the raider's red-lit command pod, and the Mother on her throne behind the mothership's bridge glass.</li>
+    </ul>
+    <strong>Revision 3</strong>
+    <ul>
+      <li>More ship detail (hoses, life-support tank, electronics), Catliens less cat-like, sunglasses and cigar on the webcam helmet, all questions settled.</li>
     </ul>
     <strong>Revision 2</strong>
     <ul>
@@ -171,12 +174,13 @@ svg text { font-family: var(--f-mono); }
 <section>
   <div class="eyebrow">Graphics</div>
   <h2>Models and effects</h2>
-  <div class="col"><p>Low-poly with hard flat shading, bloom and faint scanlines: retro but clean, a notch grim. Everything is generated in code. Human tech is patched-together, rusty orange salvage. Catliens are near-black biomech hulls with dried-blood plates, bone struts and ember-red slit sensors.</p></div>
+  <div class="col"><p>Moderate polygon counts with smooth shading, per-pixel lighting, specular highlights, bloom and faint scanlines: a slightly retro look, but grounded and grim rather than cartoonish. Everything is generated in code. Human tech is patched-together orange salvage full of hoses and electronics. Catlien ships are dark predatory warships covered in machinery, lit from inside by ember red and a few sickly green windows. The cats are only seen inside, as backlit silhouettes with glowing slit eyes.</p></div>
   <div class="grid2">
-    <figure><img src="img/01_ship.webp" alt="The boxy orange FaceCommander ship with glass dome and brain, side pods, swept fins and yellow exhaust flames" width="1280" height="720" loading="lazy"><figcaption>FaceCommander. A beveled brick of a hull with a stepped prow, side pods and swept fins after the 2D sprite, three square exhausts with yellow flames. James' brain sits under the dome, fed by a green life-support tank. Hoses, an LED electronics rack, radiator fins, a radar dish and a nuke rack cover the hull.</figcaption></figure>
-    <figure><img src="img/03_catlien_fighter.webp" alt="Catlien raider: black arrowhead hull with dark red swept wings, bone mandible guns and glowing ember slit sensors" width="1280" height="720" loading="lazy"><figcaption>Catlien raider (level 5). An abstract arrowhead warship with bone ribs, a tail spine and claw-tipped wings. Only the slanted slit sensors hint at a cat. It fires from bone mandibles.</figcaption></figure>
-    <figure><img src="img/04_mothership.webp" alt="Catlien mothership: black crescent hull with forward claws, bone ribs, spikes and a red slit-pupil eye in the center" width="1280" height="720" loading="lazy"><figcaption>Mothership (level 7). A black crescent with forward claws, bone ribs, rear spikes and a glowing dorsal spine. At the centre is the throne chamber, a slit-pupil eye that stares back.</figcaption></figure>
-    <figure><img src="img/05_mothership_zones.webp" alt="Top view of the mothership with five damage zones marked" width="1280" height="720" loading="lazy"><figcaption>Damage zones as specified: 30 / 15 / 10 / 15 / 30 % of the width. Zone 3 is the eye.</figcaption></figure>
+    <figure><img src="img/01_ship.webp" alt="The boxy orange FaceCommander ship with glass dome and brain, side pods, swept fins and yellow exhaust flames" width="1280" height="720" loading="lazy"><figcaption>FaceCommander. A rounded orange hull with side pods and swept fins after the 2D sprite, and three heat-tinted bell nozzles with yellow flames. James' brain sits under the dome, fed by a green life-support tank. Hoses, an LED electronics rack, radiator fins, a radar dish and a nuke rack cover the hull.</figcaption></figure>
+    <figure><img src="img/03_catlien_fighter.webp" alt="Catlien raider: black arrowhead hull with dark red swept wings, bone mandible guns and glowing ember slit sensors" width="1280" height="720" loading="lazy"><figcaption>Catlien raider (level 5). A predatory warship with a wide engine body, downswept wings with disruptor cannons, and a long neck ending in a command pod. Under the red-lit canopy sits the Catlien pilot.</figcaption></figure>
+    <figure><img src="img/04_mothership.webp" alt="Catlien mothership: black crescent hull with forward claws, bone ribs, spikes and a red slit-pupil eye in the center" width="1280" height="720" loading="lazy"><figcaption>Mothership (level 7). An arrowhead dreadnought crusted with machinery and conduits, with turrets along the leading edges, rear spikes and a bank of red engines. The bridge tower in the centre holds the Mother.</figcaption></figure>
+    <figure><img src="img/05_mothership_zones.webp" alt="Top view of the mothership with five damage zones marked" width="1280" height="720" loading="lazy"><figcaption>Damage zones as specified: 30 / 15 / 10 / 15 / 30 % of the width. Zone 3 is the bridge tower with the Mother.</figcaption></figure>
+    <figure><img src="img/14_catlien_closeups.webp" alt="Two close-ups: a Catlien pilot with glowing amber slit eyes under a red canopy, and the crowned Mother with red eyes and fangs behind the bridge glass" width="1280" height="720" loading="lazy"><figcaption>Catliens up close: the raider pilot and the crowned Mother, backlit by red light, with matte black fur and glowing slit eyes. In play they are small; close-ups like these appear in the intro and outro.</figcaption></figure>
     <figure><img src="img/02_asteroids.webp" alt="Asteroids of category 1 and 2" width="1280" height="720" loading="lazy"><figcaption>Asteroids. Category 2 shows glowing fracture lines where it splits into up to three category 1 rocks.</figcaption></figure>
     <figure><img src="img/07_black_hole.webp" alt="Black hole with accretion disk" width="1280" height="720" loading="lazy"><figcaption>Black hole (level 6, artificial in level 7). The closer you get, the deeper and more muffled the music becomes.</figcaption></figure>
     <figure><img src="img/06_boltzmann_brain.webp" alt="Boltzmann brain with neuron sparks" width="1280" height="720" loading="lazy"><figcaption>Boltzmann brain (level 4). Forms out of nothing in a shower of sparks and decays after 1–3 s.</figcaption></figure>

@@ -8,7 +8,7 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from panda3d.core import (
-    AmbientLight, AntialiasAttrib, Vec3, DirectionalLight, Filename, OrthographicLens, Point2, Point3,
+    AmbientLight, AntialiasAttrib, Vec3, DirectionalLight, Filename, Material, OrthographicLens, Point2, Point3,
     loadPrcFileData,
 )
 
@@ -35,6 +35,11 @@ base = ShowBase()
 base.disableMouse()
 base.setBackgroundColor(0, 0, 0, 0)
 base.render.setAntialias(AntialiasAttrib.MMultisample)
+base.render.setShaderAuto()  # per-pixel lighting with specular highlights
+_mat = Material("hull")
+_mat.setSpecular((0.32, 0.32, 0.35, 1))
+_mat.setShininess(28)
+base.render.setMaterial(_mat)
 PERSP = base.cam.node().getLens()
 
 amb = base.render.attachNewNode(AmbientLight("amb"))
@@ -175,7 +180,7 @@ def shot_ship():
         s.setHpr(25, 0, -12)
     fg, _ = render(build, (-5.5, -8.5, 5.0), (0, -0.2, 0), fov=40)
     img = finish(fg, background(2))
-    save(caption(img, "FaceCommander", "boxy salvage gunship · life-support tank · hoses · electronics · nukes"),
+    save(caption(img, "FaceCommander", "rounded salvage gunship · life-support tank · hoses · electronics · nukes"),
          "01_ship.png")
 
 
@@ -209,7 +214,7 @@ def shot_fighter():
         M.build_laser_bolt(lb, (0.2, -3.2, 0.05), color=(1.0, 0.25, 0.3), length=0.7)
     fg, _ = render(build, (1.5, -6.5, 7.5), (0, -0.1, 0), fov=40)
     img = finish(fg, background(4, tint=(0.4, 0.04, 0.05), tint2=(0.08, 0.05, 0.12)))
-    save(caption(img, "Catlien Raider", "biomech arrowhead · bone mandible guns · ember slit sensors"),
+    save(caption(img, "Catlien Raider", "predator warship · long neck · command pod with a Catlien pilot"),
          "03_catlien_fighter.png")
 
 
@@ -217,9 +222,28 @@ def shot_mothership():
     def build(r):
         m = M.build_mothership(r)
         m.setHpr(0, 0, 0)
-    fg, _ = render(build, (0, -19, 13), (0, 0.5, 0), fov=50)
+    fg, _ = render(build, (2.5, -16.5, 7.5), (0, 0.3, 0.6), fov=52)
     img = finish(fg, background(5, tint=(0.45, 0.03, 0.04), tint2=(0.06, 0.04, 0.1)))
-    save(caption(img, "Catlien Mothership", "final boss · the throne chamber of the Mother stares back"), "04_mothership.png")
+    save(caption(img, "Catlien Mothership", "final boss · a dreadnought of machinery · the Mother waits behind the bridge glass"), "04_mothership.png")
+
+
+def shot_catlien_closeups():
+    halves = []
+    for build, cam, look in (
+            (lambda r: M.build_fighter(r), (0.3, -2.75, 0.55), (0, -1.8, 0.36)),
+            (lambda r: M.build_mothership(r), (0.9, -4.4, 2.9), (0, -1.3, 2.6))):
+        fg, _ = render(build, cam, look, fov=30)
+        halves.append(finish(fg, background(14, tint=(0.35, 0.03, 0.04), tint2=(0.05, 0.03, 0.08)), thr=0.66))
+    strip = Image.new("RGB", (W, H))
+    w2 = W // 2
+    for i, f in enumerate(halves):
+        strip.paste(f.crop(((W - w2) // 2, 0, (W - w2) // 2 + w2, H)), (i * w2, 0))
+    d = ImageDraw.Draw(strip)
+    d.line([(w2, 0), (w2, H)], fill=(40, 30, 35), width=2)
+    for i, t in enumerate(("raider pilot in the command pod", "the Mother on her throne, behind the bridge")):
+        label(d, (i * w2 + w2 / 2, H - 40), t, size=22)
+    caption(strip, "Catliens up close", "backlit silhouettes, glowing slit eyes")
+    save(strip, "14_catlien_closeups.png")
 
 
 def shot_mothership_zones():
@@ -227,9 +251,9 @@ def shot_mothership_zones():
 
     def build(r):
         M.build_mothership(r, width)
-    fw = 17.0
+    fw = 22.0
     fg, _ = render(build, (0, 0, 30), (0, 0, 0), ortho=(fw, fw * H / W), up=(0, 1, 0))
-    img = finish(fg, background(5, nebula=0.5))
+    img = finish(fg * np.array([0.7, 0.7, 0.7, 1.0]), background(5, nebula=0.5))
     ov = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
     zones = M.mothership_layout(width)
@@ -450,7 +474,8 @@ def shot_ingame_l1():
 def shot_ingame_l7():
     def build(r):
         m = M.build_mothership(r)
-        m.setPos(-1.5, 16.5, 0)
+        m.setPos(-1.5, 17.5, 0)
+        m.setScale(0.85)
         s = M.build_ship(r)
         s.setPos(-3.0, -6.2, 0)
         s.setR(-10)

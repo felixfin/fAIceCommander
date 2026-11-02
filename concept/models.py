@@ -7,7 +7,7 @@ import math
 
 import numpy as np
 from panda3d.core import (
-    ColorBlendAttrib, CardMaker, Point3, Geom, GeomNode, GeomTriangles, GeomVertexData,
+    ColorBlendAttrib, CardMaker, Material, Point3, Geom, GeomNode, GeomTriangles, GeomVertexData,
     GeomVertexFormat, GeomVertexWriter, NodePath, PNMImage, Texture, TransparencyAttrib,
 )
 
@@ -15,7 +15,7 @@ from panda3d.core import (
 # ---------------------------------------------------------------- mesh core
 
 class Mesh:
-    """Collects flat-shaded triangles (retro low-poly look)."""
+    """Collects triangles; shading is flat or smooth with a crease angle (see node())."""
 
     def __init__(self):
         self.tris = []  # ([a, b, c], [ca, cb, cc])
@@ -46,18 +46,42 @@ class Mesh:
                 self.tris.append(([V[j] for j in ids], cols))
         return self
 
-    def node(self, name="mesh"):
+    def node(self, name="mesh", smooth=None):
+        """smooth: crease angle in degrees. Corners whose faces meet flatter than this share
+        an averaged normal (rounded look); sharper edges stay hard. None = flat shading."""
+        tris, fns = [], []
+        for pts, cols in self.tris:
+            a, b, c = pts
+            n = np.cross(b - a, c - a)
+            if np.linalg.norm(n) < 1e-12:
+                continue
+            tris.append((pts, cols))
+            fns.append(n)
+        fns = np.array(fns) if fns else np.zeros((0, 3))
+        units = fns / np.maximum(np.linalg.norm(fns, axis=1, keepdims=True), 1e-12)
+        corner_normals = []
+        if smooth:
+            cos_lim = math.cos(math.radians(smooth))
+            groups = {}
+            for ti, (pts, _) in enumerate(tris):
+                for p in pts:
+                    groups.setdefault(tuple(np.round(p, 5)), []).append(ti)
+            for ti, (pts, _) in enumerate(tris):
+                ns = []
+                for p in pts:
+                    nb = groups[tuple(np.round(p, 5))]
+                    sel = [tj for tj in nb if units[tj] @ units[ti] > cos_lim]
+                    n = fns[sel].sum(0)
+                    ns.append(n / max(np.linalg.norm(n), 1e-12))
+                corner_normals.append(ns)
+        else:
+            corner_normals = [[u, u, u] for u in units]
         vd = GeomVertexData(name, GeomVertexFormat.getV3n3c4(), Geom.UHStatic)
         vw, nw, cw = (GeomVertexWriter(vd, c) for c in ("vertex", "normal", "color"))
         prim = GeomTriangles(Geom.UHStatic)
         i = 0
-        for (a, b, c), cols in self.tris:
-            n = np.cross(b - a, c - a)
-            ln = np.linalg.norm(n)
-            if ln < 1e-12:
-                continue
-            n = n / ln
-            for p, col in zip((a, b, c), cols):
+        for ((pts, cols), ns) in zip(tris, corner_normals):
+            for p, col, n in zip(pts, cols, ns):
                 vw.addData3(*p)
                 nw.addData3(*n)
                 cw.addData4(*col)
@@ -74,9 +98,12 @@ def _rgba(c):
     return tuple(c) if len(c) == 4 else (*c, 1.0)
 
 
+SMOOTH = 35.0  # default crease angle: curved surfaces render round, box edges stay crisp
+
+
 def part(parent, V, F, col, pos=(0, 0, 0), hpr=(0, 0, 0), scale=1, orient="center",
-         unlit=False, alpha=False, additive=False, vcol=None, two_sided=False, name="part"):
-    np_ = Mesh().add_mesh(V, F, col, orient=orient, vcol=vcol).node(name)
+         unlit=False, alpha=False, additive=False, vcol=None, two_sided=False, name="part", smooth=SMOOTH):
+    np_ = Mesh().add_mesh(V, F, col, orient=orient, vcol=vcol).node(name, smooth=None if (unlit or additive) else smooth)
     np_.reparentTo(parent)
     np_.setPos(*pos)
     np_.setHpr(*hpr)
@@ -328,170 +355,390 @@ def build_asteroid(parent, seed, radius, category=1):
     return root
 
 
+# ---------------------------------------------------------------- rounded primitives
+
+def superellipse(a, n):
+    c, s = math.cos(a), math.sin(a)
+    return math.copysign(abs(c) ** (2 / n), c), math.copysign(abs(s) ** (2 / n), s)
+
+
+def _ring_faces(V, centers, seg, closed_caps):
+    """Quads between consecutive rings (+ optional fan caps), wound outward."""
+    F = []
+
+    def emit(tri, ref):
+        a, b, c = (V[i] for i in tri)
+        if np.dot(np.cross(b - a, c - a), (a + b + c) / 3 - ref) < 0:
+            tri = (tri[0], tri[2], tri[1])
+        F.append(tri)
+
+    nr = len(centers)
+    for i in range(nr - 1):
+        ref = (centers[i] + centers[i + 1]) / 2
+        for j in range(seg):
+            a, b = i * seg + j, i * seg + (j + 1) % seg
+            emit((a, b, b + seg), ref)
+            emit((a, b + seg, a + seg), ref)
+    if closed_caps:
+        c0, c1 = nr * seg, nr * seg + 1
+        k = (nr - 1) * seg
+        for j in range(seg):
+            emit((c0, j, (j + 1) % seg), centers[1])
+            emit((c1, k + j, k + (j + 1) % seg), centers[-2])
+    return F
+
+
+def _pad(s):
+    return tuple(s) + (0.0, 2.5, 0.0)[len(s) - 3:]
+
+
+def sweep(sections, seg=28, axis="y"):
+    """Rounded hull: superellipse cross-sections placed along an axis.
+
+    sections: [(t, w, h, zoff=0, n=2.5, woff=0), ...]; t = position along the axis, w/h = half width /
+    half height (width runs along x for axis "y", along y for axis "x"), n = 2 ellipse ... 4+ rounded box.
+    Faces come out wound outward, so pass orient=None to part().
+    """
+    secs = [_pad(s) for s in sections]
+
+    def xyz(t, v, z):
+        return (v, t, z) if axis == "y" else (t, v, z)
+
+    V, centers = [], []
+    for (t, w, h, zo, n, wo) in secs:
+        for j in range(seg):
+            cx, cz = superellipse(2 * math.pi * j / seg, n)
+            V.append(xyz(t, wo + w * cx, zo + h * cz))
+        centers.append(np.array(xyz(t, wo, zo), float))
+    V += [tuple(centers[0]), tuple(centers[-1])]
+    V = np.array(V, float)
+    return V, _ring_faces(V, centers, seg, True)
+
+
+def sweep_top(sections, x, y):
+    """Height of the upper surface of a y-axis sweep at (x, y); None outside the hull."""
+    secs = sorted((_pad(s) for s in sections), key=lambda s: s[0])
+    for s0, s1 in zip(secs, secs[1:]):
+        if s0[0] <= y <= s1[0]:
+            f = (y - s0[0]) / max(s1[0] - s0[0], 1e-9)
+            t, w, h, zo, n, wo = (a + (b - a) * f for a, b in zip(s0, s1))
+            u = abs((x - wo) / max(w, 1e-9))
+            if u >= 0.98:
+                return None
+            return zo + h * (1 - u ** n) ** (1 / n)
+    return None
+
+
+def tube_mesh(points, radius, seg=8):
+    """Smooth hose through the given points (parallel-transport frames)."""
+    P = np.array(points, float)
+    T = np.gradient(P, axis=0)
+    T /= np.linalg.norm(T, axis=1, keepdims=True)
+    ref = np.array([0, 0, 1.0]) if abs(T[0][2]) < 0.9 else np.array([1.0, 0, 0])
+    nrm = np.cross(T[0], ref)
+    nrm /= np.linalg.norm(nrm)
+    V, centers = [], []
+    for p, t in zip(P, T):
+        nrm = nrm - t * (nrm @ t)
+        nrm /= np.linalg.norm(nrm)
+        bi = np.cross(t, nrm)
+        for j in range(seg):
+            a = 2 * math.pi * j / seg
+            V.append(p + radius * (math.cos(a) * nrm + math.sin(a) * bi))
+        centers.append(p)
+    V += [P[0], P[-1]]
+    V = np.array(V, float)
+    return V, _ring_faces(V, centers, seg, True)
+
+
+def tube(root, ctrl, radius, color, n=16, band=None, glowing=False):
+    """Hose along a cubic bezier; optional coloured bands."""
+    pts = _bezier(ctrl, n)
+    color = _rgba(color)
+    V, F = tube_mesh(pts, radius, 10)
+    part(root, V, F, color, orient=None, unlit=glowing, alpha=color[3] < 1)
+    if band is not None:
+        for p0, p1 in zip(pts[2::4], pts[3::4]):
+            Vb, Fb = tube_mesh([p0, (p0 + p1) / 2, p1], radius * 1.15, 10)
+            part(root, Vb, Fb, band, orient=None)
+    if glowing:
+        for p in pts[::4]:
+            glow(root, tuple(p), radius * 5, (color[0], color[1], color[2], 0.45))
+
+
+def greebles(root, sections, count, rng, pick, size=(0.1, 0.5), height=(0.04, 0.25), offset=(0, 0, 0),
+             region=None, palette=((0.1, 0.1, 0.11), (0.14, 0.13, 0.13), (0.07, 0.07, 0.08))):
+    """Scatters machinery boxes onto the upper surface of a y-axis sweep (Borg-style surface clutter)."""
+    xs = [s[1] + abs(_pad(s)[5]) for s in sections]
+    ys = [s[0] for s in sections]
+    placed = 0
+    for _ in range(count * 6):
+        if placed >= count:
+            break
+        x = rng.uniform(-max(xs), max(xs))
+        y = rng.uniform(min(ys), max(ys))
+        if region and not region(x, y):
+            continue
+        z = sweep_top(sections, x, y)
+        if z is None:
+            continue
+        sx, sy = rng.uniform(*size), rng.uniform(*size)
+        sz = rng.uniform(*height)
+        Vb, Fb = box(sx, sy, sz)
+        col = pick(x, y) if pick else palette[rng.integers(len(palette))]
+        glowing = len(col) == 5  # 5-tuple marks an emissive part: small lit windows / vents
+        if glowing:
+            sx, sy, sz = sx * 0.3, sy * 0.3, sz * 0.4
+        part(root, Vb, Fb, col[:4], pos=(x + offset[0], y + offset[1], z + offset[2] + sz * 0.3),
+             hpr=(rng.choice([0, 90]), 0, 0), smooth=None, unlit=glowing)
+        placed += 1
+
+
+def _noise(p, k=1.0):
+    x, y, z = p[0] * k, p[1] * k, p[2] * k
+    return (math.sin(7.3 * x + 3.1 * y) * math.sin(5.7 * y - 2.3 * z + 1.3) + math.sin(11.1 * z + 4.7 * x) * 0.5) / 1.5
+
+
+def paint(lo, hi, z0, z1, grime=0.12, soot_y=None):
+    """Vertex colour gradient: dark underside -> lit top, with grime noise and optional engine soot."""
+    lo, hi = np.array(lo), np.array(hi)
+
+    def f(p):
+        t = min(max((p[2] - z0) / (z1 - z0), 0.0), 1.0) ** 0.8
+        c = lo + (hi - lo) * t
+        c = c * (1 + grime * _noise(p))
+        if soot_y is not None and p[1] < soot_y:
+            c = c * max(0.35, 1 - (soot_y - p[1]) * 1.6)
+        return tuple(np.clip(c, 0, 1))
+    return f
+
+
+# ---------------------------------------------------------------- FaceCommander
+
+ORANGE_LO, ORANGE_HI = (0.32, 0.11, 0.035), (0.93, 0.47, 0.14)
+METAL_LO, METAL_HI = (0.09, 0.09, 0.1), (0.38, 0.38, 0.4)
+
+SHIP_HULL = [(2.25, 0.02, 0.02, 0.03, 2.0), (2.0, 0.2, 0.13, 0.04, 2.6), (1.5, 0.42, 0.25, 0.05, 3.0),
+             (0.8, 0.6, 0.34, 0.05, 3.2), (-0.4, 0.66, 0.36, 0.04, 3.2), (-1.2, 0.6, 0.33, 0.02, 3.0),
+             (-1.42, 0.5, 0.28, 0.0, 2.8), (-1.48, 0.42, 0.22, 0.0, 2.6)]
+
+
 def build_ship(parent):
-    """FaceCommander: a boxy salvaged gunship, silhouette borrowed from the 2D original sprite."""
+    """FaceCommander: a rounded salvage gunship with the 2D sprite's silhouette (hull, pods, swept fins)."""
     root = parent.attachNewNode("ship")
-    ORANGE = (0.86, 0.42, 0.12)
-    # main hull: beveled brick, tapering to a stepped prow
-    outline = [(0.55, -1.35), (0.62, -1.15), (0.62, 0.75), (0.42, 1.25), (-0.42, 1.25), (-0.62, 0.75),
-               (-0.62, -1.15), (-0.55, -1.35)]
-    V, F = loft(outline, [(0.88, -0.32), (1.0, -0.12), (1.0, 0.18), (0.86, 0.34)])
-    part(root, V, F, ORANGE)
-    # stepped prow like the sprite's pointed top
-    Vb, Fb = box(0.6, 0.55, 0.42)
-    part(root, Vb, Fb, (0.78, 0.36, 0.1), pos=(0, 1.45, 0.02))
-    Vb, Fb = box(0.36, 0.4, 0.3)
-    part(root, Vb, Fb, (0.7, 0.32, 0.09), pos=(0, 1.85, 0.0))
-    Vw, Fw = loft([(0.16, 0), (0.0, 0.35), (-0.16, 0)], [(1, -0.12), (1, 0.12)])
-    part(root, Vw, Fw, (0.32, 0.33, 0.36), pos=(0, 2.05, 0))
-    # side pods with the sprite's swept fins
-    for sgn, col in ((1, (0.3, 0.31, 0.34)), (-1, (0.36, 0.37, 0.33))):
-        Vb, Fb = box(0.42, 1.7, 0.5)
-        part(root, Vb, Fb, col, pos=(sgn * 0.88, -0.35, -0.08))
-        Vb, Fb = box(0.3, 0.5, 0.34)
-        part(root, Vb, Fb, (0.24, 0.25, 0.28), pos=(sgn * 0.88, 0.7, -0.1))
-        fin = [(sgn * 1.05, -0.2), (sgn * 1.75, -0.95), (sgn * 1.75, -1.4), (sgn * 1.05, -1.15)]
-        Vf, Ff = prism(fin if sgn > 0 else fin[::-1], 0.1)
-        part(root, Vf, Ff, ORANGE, pos=(0, 0, -0.1), hpr=(0, 0, -sgn * 12))
-        for k in range(3):  # hazard stripes on the fins
-            Vs, Fs = box(0.1, 0.36, 0.02)
-            part(root, Vs, Fs, (0.95, 0.78, 0.1) if k % 2 == 0 else (0.07, 0.07, 0.07),
-                 pos=(sgn * (1.3 + k * 0.12), -0.95, -0.03 - k * 0.025), hpr=(sgn * 45, 0, -sgn * 12))
-        # laser cannon in the pod nose, green muzzle like the 2D original
-        Vc, Fc = lathe([(0.06, 0.5), (0.08, 0.0)], 6, "y")
-        part(root, Vc, Fc, DARK, pos=(sgn * 0.88, 0.95, -0.1), orient="y")
-        Vt, Ft = icosphere(1)
-        part(root, Vt * 0.07, Ft, GREEN_LASER, pos=(sgn * 0.88, 1.47, -0.1), unlit=True)
-        glow(root, (sgn * 0.88, 1.5, -0.1), 0.35, (*GREEN_LASER, 0.9))
-        # nuke rack on the pod
-        for j in range(3):
-            Vr, Fr = lathe([(0.0, 0.32), (0.05, 0.22), (0.05, -0.22)], 6, "y")
-            part(root, Vr, Fr, (0.55, 0.56, 0.52), pos=(sgn * (0.8 + j * 0.08), -0.55, 0.2), orient="y")
-            part(root, Vt * 0.04, Ft, (1, 0.15, 0.1), pos=(sgn * (0.8 + j * 0.08), -0.23, 0.2), unlit=True)
-    # salvaged plates, rivets, antenna
-    rng = np.random.default_rng(7)
-    for (px, py, sx, sy, col) in [(0.18, 0.35, 0.4, 0.5, (0.42, 0.44, 0.47)), (-0.22, -0.55, 0.38, 0.6, OLIVE),
-                                  (0.2, -0.95, 0.3, 0.35, (0.55, 0.22, 0.1))]:
-        Vb, Fb = box(sx, sy, 0.05)
-        part(root, Vb, Fb, col, pos=(px, py, 0.36), hpr=(rng.uniform(-5, 5), 0, 0))
-    Vb, Fb = box(0.03, 0.03, 0.6)
-    part(root, Vb, Fb, DARK, pos=(-0.35, -1.0, 0.62))
-    part(root, icosphere(0)[0] * 0.05, icosphere(0)[1], (1, 0.2, 0.1), pos=(-0.35, -1.0, 0.93), unlit=True)
-    # --- greebles: hoses, electronics, life support ---
-    Vi, Fi = icosphere(1)
-    # coolant hoses from the hull into the pods (rubber with hazard bands) and one glowing coolant line
+    V, F = sweep(SHIP_HULL, 36)
+    part(root, V, F, (1, 1, 1), orient=None, vcol=paint(ORANGE_LO, ORANGE_HI, -0.36, 0.36, soot_y=-1.15))
+    top = lambda x, y: sweep_top(SHIP_HULL, x, y)
+    # panel seams: thin dark bands hugging the hull
+    for y in (1.15, 0.2, -0.75):
+        ring = [(x, y, (top(x, y) or 0) + 0.004) for x in np.linspace(-0.6, 0.6, 15) if top(x, y)]
+        if len(ring) > 3:
+            Vr, Fr = tube_mesh(ring, 0.012, 6)
+            part(root, Vr, Fr, (0.18, 0.07, 0.03), orient=None)
+    pod = [(1.25, 0.04, 0.04, 0, 2.0), (1.15, 0.17, 0.19, 0, 2.6), (0.6, 0.22, 0.24, 0, 2.8),
+           (-1.3, 0.24, 0.25, 0, 2.8), (-1.55, 0.2, 0.21, 0, 2.6), (-1.6, 0.14, 0.15, 0, 2.4)]
+    Vi, Fi = icosphere(2)
     for sgn in (1, -1):
-        for j, (y0, y1) in enumerate(((0.45, 0.25), (-0.35, -0.6))):
-            tube(root, [(sgn * 0.5, y0, 0.22), (sgn * 0.68, y0 - 0.05, 0.42), (sgn * 0.85, y1, 0.38),
-                        (sgn * 0.88, y1 - 0.1, 0.17)], 0.05, (0.12, 0.12, 0.13), n=12,
-                 band=(0.95, 0.75, 0.1))
-        tube(root, [(sgn * 0.42, -0.95, 0.3), (sgn * 0.62, -1.1, 0.5), (sgn * 0.8, -1.05, 0.38),
-                    (sgn * 0.88, -0.95, 0.17)], 0.045, (0.35, 1.0, 0.45, 0.65), n=12, glowing=True)
-        # heat radiator fins on the pod flanks
-        for k in range(6):
-            Vb, Fb = box(0.03, 0.08, 0.36)
-            part(root, Vb, Fb, (0.22, 0.23, 0.26), pos=(sgn * 1.1, -0.85 + k * 0.13, -0.08))
-        # cable bundle along the hull edge
-        for k in range(3):
-            Vb, Fb = box(0.025, 1.8, 0.025)
-            part(root, Vb, Fb, ((0.7, 0.1, 0.1), (0.1, 0.3, 0.7), (0.15, 0.15, 0.15))[k],
-                 pos=(sgn * (0.6 + k * 0.025), -0.2, 0.21 + k * 0.02))
-    # life-support unit behind the dome: green fluid tank, pump box, tubes into the dome
-    Vt, Ft = lathe([(0.0, 0.0), (0.13, 0.02), (0.13, 0.42), (0.0, 0.44)], 10, "y")
-    part(root, Vt, Ft, (0.35, 1.0, 0.45, 0.55), pos=(0.0, -0.55, 0.47), unlit=True, alpha=True, orient="y")
-    glow(root, (0.0, -0.33, 0.47), 0.5, (0.35, 1.0, 0.45, 0.6))
-    for y in (-0.56, -0.1):
-        Vr, Fr = lathe([(0.15, 0.0), (0.15, 0.04)], 10, "y")
-        part(root, Vr, Fr, DARK, pos=(0.0, y, 0.47), orient="y")
-    Vb, Fb = box(0.32, 0.25, 0.18)
-    part(root, Vb, Fb, (0.3, 0.31, 0.34), pos=(0.0, -0.8, 0.43))
+        px = sgn * 0.98
+        Vp, Fp = sweep(pod, 28)
+        part(root, Vp, Fp, (1, 1, 1), pos=(px, 0, -0.08), orient=None,
+             vcol=paint(METAL_LO, METAL_HI, -0.25, 0.25, soot_y=-1.3))
+        Vy, Fy = sweep([(sgn * 0.5, 0.45, 0.07, 0, 2.5, -0.15), (sgn * 0.85, 0.4, 0.06, 0, 2.5, -0.2)], 20, "x")
+        part(root, Vy, Fy, (1, 1, 1), pos=(0, 0, -0.02), orient=None, vcol=paint(METAL_LO, METAL_HI, -0.07, 0.07))
+        fin = [(sgn * 1.15, 0.5, 0.075, -0.08, 2.2, -0.75), (sgn * 1.75, 0.3, 0.045, -0.24, 2.2, -1.1),
+               (sgn * 1.97, 0.17, 0.03, -0.3, 2.2, -1.25)]
+        Vf, Ff = sweep(fin, 24, "x")
+        part(root, Vf, Ff, (1, 1, 1), orient=None, vcol=paint(ORANGE_LO, ORANGE_HI, -0.33, -0.0, grime=0.18))
+        for k in range(3):  # hazard chevrons near the fin root
+            Vs, Fs = box(0.09, 0.3, 0.012)
+            part(root, Vs, Fs, (0.95, 0.75, 0.1) if k % 2 == 0 else (0.06, 0.06, 0.06),
+                 pos=(sgn * (1.3 + k * 0.1), -0.8 - k * 0.05, -0.03 - k * 0.025), hpr=(sgn * 40, 0, -sgn * 15),
+                 smooth=None)
+        # laser cannon in the pod nose, green muzzle (2D original)
+        Vc, Fc = lathe([(0.0, 0.62), (0.05, 0.6), (0.06, 0.45), (0.06, 0.0), (0.09, -0.05)], 14, "y")
+        part(root, Vc, Fc, (0.2, 0.2, 0.22), pos=(px, 1.0, -0.08), orient="y")
+        part(root, Vi * 0.06, Fi, GREEN_LASER, pos=(px, 1.62, -0.08), unlit=True)
+        glow(root, (px, 1.66, -0.08), 0.38, (*GREEN_LASER, 0.9))
+        for j in range(3):  # nuke rack on the pod
+            Vr, Fr = lathe([(0.0, 0.34), (0.045, 0.24), (0.05, -0.2), (0.07, -0.26)], 12, "y")
+            part(root, Vr, Fr, (0.62, 0.62, 0.58), pos=(px + sgn * (j - 1) * 0.1, -0.5, 0.2), orient="y")
+            part(root, Vi * 0.035, Fi, (1, 0.15, 0.1), pos=(px + sgn * (j - 1) * 0.1, -0.15, 0.2), unlit=True)
+        for k in range(7):  # radiator fins
+            Vb, Fb = box(0.025, 0.07, 0.32)
+            part(root, Vb, Fb, (0.2, 0.2, 0.22), pos=(sgn * 1.23, -0.95 + k * 0.12, -0.08), smooth=None)
+        # coolant hoses into the pods, plus a glowing coolant line
+        for (y0, y1) in ((0.45, 0.25), (-0.35, -0.6)):
+            z0 = top(sgn * 0.5, y0)
+            tube(root, [(sgn * 0.5, y0, z0), (sgn * 0.7, y0 - 0.05, z0 + 0.2), (sgn * 0.88, y1, 0.36),
+                        (sgn * 0.92, y1 - 0.1, 0.15)], 0.04, (0.1, 0.1, 0.11), band=(0.9, 0.7, 0.1))
+        z0 = top(sgn * 0.42, -0.95)
+        tube(root, [(sgn * 0.42, -0.95, z0), (sgn * 0.62, -1.1, z0 + 0.2), (sgn * 0.82, -1.05, 0.36),
+                    (sgn * 0.92, -0.95, 0.15)], 0.035, (0.35, 1.0, 0.45, 0.65), glowing=True)
+    # three bell nozzles, heat-tinted, with yellow-white flames
+    for x in (-0.3, 0.0, 0.3):
+        Vn, Fn = lathe([(0.1, -1.38), (0.13, -1.48), (0.17, -1.62), (0.2, -1.75)], 18, "y")
+        part(root, Vn, Fn, (1, 1, 1), pos=(x, 0, 0), orient="y", two_sided=True,
+             vcol=lambda p: tuple(np.clip(np.array((0.22, 0.2, 0.22)) + max(0, -p[1] - 1.5) * np.array((0.6, 0.35, 0.9)), 0, 1)))
+        Vd, Fd = lathe([(0.15, 0), (0.0, 0.01)], 14, "y")
+        part(root, Vd, Fd, (1.0, 0.9, 0.55), pos=(x, -1.6, 0), unlit=True, orient=None, two_sided=True)
+        for ln, a in ((1.0, 0.45), (0.55, 0.75)):
+            Vf, Ff = lathe([(0.15, 0), (0.0, -ln)], 12, "y")
+            part(root, Vf, Ff, (1, 1, 1), pos=(x, -1.62, 0), additive=True, orient=None,
+                 vcol=lambda p, a=a, ln=ln: (1.0, 0.85 - 0.3 * (-p[1] / ln), 0.4 - 0.3 * (-p[1] / ln), a * (1 + p[1] / ln)))
+        glow(root, (x, -1.75, 0), 0.5, (1.0, 0.8, 0.35, 0.9))
+    # cockpit: the commander's brain under a glass dome, fed by a life-support tank
+    build_brain(root, 0.24, aura=False).setPos(0, 0.55, 0.47)
+    glow(root, (0, 0.55, 0.5), 0.65, (1.0, 0.4, 0.7, 0.4))
+    Vh, Fh = hemisphere(3)
+    part(root, Vh * np.array([0.36, 0.44, 0.3]), Fh, (0.6, 0.95, 1.0, 0.26), pos=(0, 0.55, 0.37),
+         alpha=True, two_sided=True)
+    Vr, Fr = lathe([(0.39, 0.0), (0.41, 0.03), (0.39, 0.07)], 24, "z")
+    ring = part(root, Vr, Fr, (0.2, 0.2, 0.22), pos=(0, 0.55, 0.34), orient="z")
+    ring.setScale(0.92, 1.12, 1)
+    zt = top(0, -0.45)
+    Vt, Ft = lathe([(0.0, 0.0), (0.11, 0.03), (0.12, 0.2), (0.12, 0.36), (0.11, 0.41), (0.0, 0.44)], 18, "y")
+    part(root, Vt, Ft, (0.35, 1.0, 0.45, 0.55), pos=(0.0, -0.62, zt + 0.08), unlit=True, alpha=True, orient="y")
+    glow(root, (0.0, -0.42, zt + 0.08), 0.5, (0.35, 1.0, 0.45, 0.55))
+    for y in (-0.63, -0.18):
+        Vr, Fr = lathe([(0.135, 0.0), (0.14, 0.02), (0.135, 0.04)], 18, "y")
+        part(root, Vr, Fr, (0.25, 0.25, 0.27), pos=(0.0, y, zt + 0.08), orient="y")
     for sgn in (1, -1):
-        tube(root, [(sgn * 0.08, -0.12, 0.5), (sgn * 0.2, 0.0, 0.62), (sgn * 0.3, 0.12, 0.55),
-                    (sgn * 0.3, 0.2, 0.42)], 0.035, (0.2, 0.2, 0.22), n=10)
-    # electronics rack with blinking LED matrix
-    Vb, Fb = box(0.4, 0.3, 0.12)
-    part(root, Vb, Fb, (0.17, 0.18, 0.2), pos=(0.3, -1.05, 0.4))
+        tube(root, [(sgn * 0.08, -0.2, zt + 0.12), (sgn * 0.2, -0.05, zt + 0.25), (sgn * 0.28, 0.15, zt + 0.2),
+                    (sgn * 0.28, 0.25, top(0.28, 0.25) + 0.02)], 0.03, (0.16, 0.16, 0.18))
+    # electronics rack with LED matrix
+    zr = top(0.3, -1.05)
+    Vb, Fb = box(0.38, 0.28, 0.1)
+    part(root, Vb, Fb, (0.15, 0.15, 0.17), pos=(0.3, -1.05, zr + 0.04), smooth=None)
     rng = np.random.default_rng(3)
     for ix in range(5):
         for iy in range(3):
             col = ((0.3, 1.0, 0.3), (1.0, 0.25, 0.15), (0.3, 0.7, 1.0), (1.0, 0.8, 0.2))[rng.integers(4)]
-            part(root, Vi * 0.018, Fi, col, pos=(0.17 + ix * 0.065, -1.14 + iy * 0.08, 0.465), unlit=True)
-    # radar dish and antenna array
-    Vd, Fd = lathe([(0.0, 0.0), (0.16, 0.06), (0.2, 0.1)], 10, "z")
-    part(root, Vd, Fd, (0.55, 0.56, 0.58), pos=(-0.32, 0.75, 0.42), hpr=(30, 35, 0), orient=None, two_sided=True)
-    part(root, Vi * 0.025, Fi, (1, 0.3, 0.2), pos=(-0.3, 0.73, 0.48), unlit=True)
+            part(root, Vi * 0.017, Fi, col, pos=(0.18 + ix * 0.06, -1.13 + iy * 0.075, zr + 0.095), unlit=True)
+    # radar dish and antennas
+    zd = top(-0.32, 0.95)
+    Vd, Fd = lathe([(0.0, 0.0), (0.12, 0.035), (0.19, 0.09)], 20, "z")
+    part(root, Vd, Fd, (0.6, 0.6, 0.62), pos=(-0.32, 0.95, zd + 0.06), hpr=(30, 35, 0), orient=None, two_sided=True)
+    part(root, Vi * 0.022, Fi, (1, 0.3, 0.2), pos=(-0.3, 0.93, zd + 0.12), unlit=True)
     for k in range(3):
-        Vb, Fb = box(0.015, 0.015, 0.3 + k * 0.12)
-        part(root, Vb, Fb, DARK, pos=(-0.2 - k * 0.06, -1.15, 0.5 + k * 0.06))
-    # three square exhausts with yellow-white flames (2D original had yellow flames)
-    for x in (-0.3, 0.0, 0.3):
-        Vb, Fb = box(0.24, 0.12, 0.24)
-        part(root, Vb, Fb, (0.15, 0.15, 0.17), pos=(x, -1.4, -0.02))
-        Vd, Fd = box(0.18, 0.01, 0.18)
-        part(root, Vd, Fd, (1.0, 0.9, 0.5), pos=(x, -1.47, -0.02), unlit=True)
-        for ln, a in ((0.9, 0.45), (0.5, 0.75)):
-            Vf, Ff = lathe([(0.11, 0), (0.0, -ln)], 4, "y", phase=math.pi / 4)
-            part(root, Vf, Ff, (1, 1, 1), pos=(x, -1.48, -0.02), additive=True, orient=None,
-                 vcol=lambda p, a=a, ln=ln: (1.0, 0.85 - 0.3 * (-p[1] / ln), 0.4 - 0.3 * (-p[1] / ln), a * (1 + p[1] / ln)))
-        glow(root, (x, -1.6, -0.02), 0.45, (1.0, 0.8, 0.35, 0.9))
-    # cockpit: the commander's brain under a glass dome (dark oval of the 2D sprite)
-    build_brain(root, 0.24, aura=False).setPos(0, 0.25, 0.44)
-    glow(root, (0, 0.25, 0.48), 0.65, (1.0, 0.4, 0.7, 0.45))
-    Vh, Fh = hemisphere(2)
-    part(root, Vh * np.array([0.38, 0.45, 0.34]), Fh, (0.55, 0.95, 1.0, 0.28), pos=(0, 0.25, 0.34),
-         alpha=True, two_sided=True)
-    Vr, Fr = lathe([(0.42, 0.0), (0.42, 0.07)], 12, "z")
-    ring = part(root, Vr, Fr, DARK, pos=(0, 0.25, 0.32), orient="z")
-    ring.setScale(0.92, 1.1, 1)
+        Vb, Fb = lathe([(0.01, 0), (0.006, 0.3 + k * 0.12)], 6, "z")
+        part(root, Vb, Fb, (0.2, 0.2, 0.22), pos=(-0.2 - k * 0.07, -1.2, top(-0.2 - k * 0.07, -1.2)), orient="z")
     return root
 
 
-# Catliens: near-black biomech hulls, dried-blood plates, bone ribs, ember-red slit sensors
-HULL_BLACK = (0.085, 0.07, 0.08)
-BLOOD = (0.2, 0.035, 0.045)
-BONE = (0.4, 0.36, 0.3)
-EMBER = (1.0, 0.32, 0.06)
+# ---------------------------------------------------------------- Catliens
+
+HULL_LO, HULL_HI = (0.035, 0.035, 0.04), (0.2, 0.19, 0.19)
+EMBER = (1.0, 0.3, 0.06)
+SICK_GREEN = (0.45, 1.0, 0.4)
 
 
-def _slit(root, pos, length, width=0.05, color=EMBER, yaw=0.0, glow_size=None):
-    Vs, Fs = box(width, length, 0.04)
-    part(root, Vs, Fs, color, pos=pos, hpr=(yaw, 0, 0), unlit=True)
-    glow(root, pos, glow_size or length * 1.4, (*color, 0.75))
+def hull_paint(z0, z1):
+    base = paint(HULL_LO, HULL_HI, z0, z1, grime=0.25)
+
+    def f(p):
+        c = np.array(base(p))
+        rust = max(0.0, _noise(p, 0.7) - 0.45) * 1.6  # dried-blood rust patches
+        return tuple(np.clip(c * (1 - rust) + np.array((0.24, 0.06, 0.04)) * rust, 0, 1))
+    return f
+
+
+def build_catlien(parent, scale=1.0, queen=False):
+    """A Catlien seen through a canopy: gaunt elongated skull, heavy brow, fangs, glowing slit eyes. Faces -Y."""
+    root = parent.attachNewNode("catlien")
+    matte = Material("fur")
+    matte.setSpecular((0, 0, 0, 1))
+    root.setMaterial(matte, 1)  # matte fur: reads as a silhouette, no plastic shine
+    fur = paint((0.015, 0.012, 0.012), (0.11, 0.085, 0.08), 0.6, 1.5, grime=0.35)
+    V, F = icosphere(3)
+    head = root.attachNewNode("head")
+    head.setPos(0, 0, 1.05)
+    head.setP(-12)  # head lowered: it stares up at you
+    part(head, V * np.array([0.34, 0.52, 0.36]), F, (1, 1, 1), pos=(0, 0.08, 0), vcol=fur)  # long skull
+    for sgn in (1, -1):  # gaunt cheekbones
+        part(head, V * np.array([0.1, 0.2, 0.08]), F, (1, 1, 1), pos=(sgn * 0.2, -0.22, -0.1), vcol=fur)
+    part(head, V * np.array([0.2, 0.3, 0.15]), F, (1, 1, 1), pos=(0, -0.42, -0.14), vcol=fur)  # narrow snout
+    part(head, V * np.array([0.06, 0.05, 0.04]), F, (0.02, 0.02, 0.02), pos=(0, -0.71, -0.08))  # nose
+    eye_col = (1.0, 0.12, 0.04) if queen else (1.0, 0.5, 0.04)
+    for sgn in (1, -1):
+        Vp, Fp = pyramid([(sgn * 0.08, 0.1), (sgn * 0.34, 0.12), (sgn * 0.22, 0.32)], (sgn * 0.3, 0.42, 0.62))
+        part(head, Vp, Fp, (0.06, 0.045, 0.045), pos=(0, 0, 0.18), smooth=None)  # swept-back ears
+        lens = [(-0.13, -0.01), (-0.02, 0.05), (0.13, 0.03), (0.03, -0.045)]
+        Ve, Fe = prism(lens, 0.02)
+        part(head, Ve[:, [0, 2, 1]] * np.array([sgn, 1, 1]), Fe, eye_col, pos=(sgn * 0.17, -0.4, 0.02),
+             hpr=(0, 0, -sgn * 22), unlit=True)
+        Vs, Fs = box(0.016, 0.03, 0.085)
+        part(head, Vs, Fs, (0, 0, 0), pos=(sgn * 0.17, -0.415, 0.02), unlit=True)
+        glow(head, (sgn * 0.17, -0.44, 0.02), 0.26, (*eye_col, 0.95))
+        part(head, V * np.array([0.17, 0.09, 0.05]), F, (0.03, 0.025, 0.025),  # heavy, angled brow ridge
+             pos=(sgn * 0.17, -0.37, 0.1), hpr=(0, 0, sgn * 24))
+        Vf, Ff = lathe([(0.022, 0.0), (0.0, -0.15)], 8, "z")  # fangs
+        part(head, Vf, Ff, (0.85, 0.8, 0.68), pos=(sgn * 0.07, -0.6, -0.2), hpr=(0, 8, 0), orient="z")
+    part(root, V * np.array([0.6, 0.34, 0.26]), F, (1, 1, 1), pos=(0, 0.05, 0.42),
+         vcol=paint((0.04, 0.04, 0.05), (0.2, 0.19, 0.2), 0.2, 0.68))  # armoured shoulders
+    Vc, Fc = lathe([(0.2, 0.62), (0.25, 0.7), (0.2, 0.78)], 16, "z")
+    part(root, Vc, Fc, (0.25, 0.06, 0.05), orient="z")
+    if queen:
+        for k in range(9):  # crown of thin spikes
+            a = math.radians(-160 + k * 40)
+            p = (0.33 * math.cos(a), 0.33 * math.sin(a) + 0.05, 1.33)
+            Vk, Fk = lathe([(0.025, 0), (0.0, 0.32 + 0.12 * (k % 2))], 6, "z")
+            part(root, Vk, Fk, (0.45, 0.32, 0.12), pos=p, hpr=(0, 0, math.degrees(math.cos(a)) * 0.0), orient="z")
+        Vt, Ft = sweep([(-0.2, 0.9, 0.12, 0, 3), (1.9, 0.6, 0.08, 0, 3)], 16, "y")
+        throne = part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(0, 2))
+        throne.setP(90)
+        throne.setPos(0, 0.45, -0.1)
+    root.setScale(scale)
+    return root
+
+
+RAIDER_BODY = [(1.25, 0.55, 0.15, 0.0, 3.0), (0.95, 0.8, 0.25, 0.02, 3.0), (0.4, 0.82, 0.29, 0.03, 3.0),
+               (-0.15, 0.55, 0.25, 0.03, 2.8), (-0.55, 0.22, 0.17, 0.04, 2.4), (-0.95, 0.13, 0.12, 0.05, 2.2),
+               (-1.25, 0.14, 0.13, 0.05, 2.2), (-1.45, 0.3, 0.21, 0.06, 2.4), (-1.8, 0.34, 0.24, 0.05, 2.5),
+               (-2.1, 0.24, 0.17, 0.03, 2.4), (-2.3, 0.04, 0.04, 0.02, 2.0)]
 
 
 def build_fighter(parent):
-    """Catlien raider: an abstract arrowhead warship; only the slanted slit sensors hint at a cat."""
+    """Catlien raider: a predatory warship - wide engine body, long neck, command pod with a cat pilot."""
     root = parent.attachNewNode("fighter")
-    outline = [(0, -1.55), (0.32, -0.75), (0.52, 0.35), (0.34, 1.0), (-0.34, 1.0), (-0.52, 0.35), (-0.32, -0.75)]
-    V, F = loft(outline, [(0.75, -0.18), (1.0, 0.0), (0.7, 0.2), (0.32, 0.32)])
-    body = part(root, V, F, HULL_BLACK)
-    neon_edges(body, (0.55, 0.06, 0.05, 0.35), 1.0)
+    V, F = sweep(RAIDER_BODY, 36)
+    part(root, V, F, (1, 1, 1), orient=None, vcol=hull_paint(-0.3, 0.32))
+    rng = np.random.default_rng(21)
+    greebles(root, RAIDER_BODY, 120, rng, None, size=(0.04, 0.13), height=(0.01, 0.05),
+             region=lambda x, y: y > -0.4 or abs(x) < 0.1)
+    Vi, Fi = icosphere(2)
     for sgn in (1, -1):
-        # claw-like swept wings
-        wing = [(sgn * 0.45, 0.3), (sgn * 1.5, 0.75), (sgn * 1.65, 0.4), (sgn * 0.5, -0.2)]
-        Vw, Fw = prism(wing if sgn > 0 else wing[::-1], 0.07)
-        w = part(root, Vw, Fw, (0.12, 0.03, 0.04), hpr=(0, 0, -sgn * 6))
-        neon_edges(w, (0.6, 0.08, 0.05, 0.4), 1.0)
-        hook = [(sgn * 1.5, 0.75), (sgn * 1.85, 0.55), (sgn * 1.65, 0.4)]
-        Vh, Fh = prism(hook if sgn > 0 else hook[::-1], 0.06)
-        part(root, Vh, Fh, BONE)
-        # mandible gun prongs reaching forward
-        Vm, Fm = lathe([(0.05, 0.0), (0.035, -0.75), (0.0, -0.95)], 5, "y")
-        part(root, Vm, Fm, BONE, pos=(sgn * 0.3, -0.75, -0.06), hpr=(-sgn * 6, 0, 0), orient="y")
-        glow(root, (sgn * 0.37, -1.62, -0.06), 0.28, (*EMBER, 0.8))
-        # slanted slit sensors
-        _slit(root, (sgn * 0.17, -0.45, 0.24), 0.38, 0.06, yaw=-sgn * 28, glow_size=0.5)
-        for k in range(3):  # bone struts on the wings
-            Vq, Fq = box(1.0, 0.04, 0.04)
-            part(root, Vq, Fq, BONE, pos=(sgn * 1.0, 0.25 + k * 0.12 - 0.1, 0.1), hpr=(sgn * (24 - k * 4), 0, -sgn * 6))
-        glow(root, (sgn * 0.55, 1.0, -0.02), 0.45, (0.9, 0.15, 0.05, 0.9))
-    # bone ribs across the spine
-    for k in range(5):
-        Vr, Fr = box(0.5 - k * 0.05, 0.05, 0.05)
-        part(root, Vr, Fr, BONE, pos=(0, -0.1 + k * 0.2, 0.3 - k * 0.01))
-    # single tail spine, lying flat
-    Vq, Fq = lathe([(0.05, 0.0), (0.0, 0.9)], 5, "y")
-    part(root, Vq, Fq, BONE, pos=(0, 0.95, 0.02), orient="y")
+        wing = [(sgn * 0.55, 0.5, 0.07, 0.0, 2.2, 0.55), (sgn * 1.3, 0.36, 0.05, -0.32, 2.2, 0.48),
+                (sgn * 2.0, 0.26, 0.04, -0.62, 2.2, 0.28)]
+        Vw, Fw = sweep(wing, 24, "x")
+        part(root, Vw, Fw, (1, 1, 1), orient=None, vcol=hull_paint(-0.7, 0.07))
+        for k in range(4):  # structural ribs on the wing
+            x = sgn * (0.75 + k * 0.32)
+            Vr, Fr = box(0.04, 0.6 - k * 0.06, 0.05)
+            part(root, Vr, Fr, (0.12, 0.11, 0.11), pos=(x, 0.5 - k * 0.03, -0.0 - k * 0.15 + 0.05),
+                 hpr=(0, 0, -sgn * 24), smooth=None)
+        # wingtip disruptor cannons
+        Vc, Fc = lathe([(0.0, 0.45), (0.08, 0.4), (0.09, -0.1), (0.06, -0.85), (0.075, -1.0)], 14, "y")
+        part(root, Vc, Fc, (1, 1, 1), pos=(sgn * 2.0, 0.25, -0.62), orient="y", vcol=hull_paint(-0.7, -0.5))
+        glow(root, (sgn * 2.0, -0.8, -0.62), 0.32, (*EMBER, 0.85))
+        # conduits along the neck
+        tube(root, [(sgn * 0.2, 0.1, 0.27), (sgn * 0.12, -0.5, 0.2), (sgn * 0.1, -1.0, 0.17),
+                    (sgn * 0.15, -1.4, 0.24)], 0.025, (0.1, 0.09, 0.09))
+        # glowing vent slits and engines
+        for k in range(4):
+            Vs, Fs = box(0.2, 0.025, 0.02)
+            part(root, Vs, Fs, EMBER, pos=(sgn * 0.5, 0.25 + k * 0.12, sweep_top(RAIDER_BODY, sgn * 0.5, 0.25 + k * 0.12) + 0.005),
+                 unlit=True)
+        Vn, Fn = lathe([(0.12, 1.15), (0.16, 1.3), (0.2, 1.42)], 16, "y")
+        part(root, Vn, Fn, (0.08, 0.08, 0.09), pos=(sgn * 0.32, 0, 0), orient="y", two_sided=True)
+        glow(root, (sgn * 0.32, 1.45, 0), 0.55, (1.0, 0.2, 0.05, 0.9))
+    # command pod: red-lit canopy with the Catlien pilot inside
+    build_catlien(root, 0.15, queen=False).setPos(0, -1.74, 0.2)
+    glow(root, (0, -1.5, 0.36), 0.5, (1.0, 0.08, 0.04, 0.55))  # red backlight: pilot reads as a silhouette
+    Vh, Fh = hemisphere(3)
+    part(root, Vh * np.array([0.21, 0.32, 0.2]), Fh, (0.9, 0.3, 0.2, 0.16), pos=(0, -1.75, 0.27),
+         alpha=True, two_sided=True)
+    Vr, Fr = lathe([(1.0, 0.0), (1.06, 0.02), (1.0, 0.045)], 28, "z")  # canopy rim
+    part(root, Vr, Fr, (0.07, 0.07, 0.07), pos=(0, -1.75, 0.255), scale=(0.21, 0.32, 1), orient="z")
     return root
 
 
@@ -502,68 +749,77 @@ def mothership_layout(width=14.0):
 
 
 def build_mothership(parent, width=14.0):
-    """The Mother's dreadnought: a black crescent with forward claws, a dorsal spine and a slit-pupil eye."""
+    """The Mother's dreadnought: an arrowhead of machinery and darkness; she sits behind the bridge glass."""
     root = parent.attachNewNode("mothership")
-    s = width / 2
-    outline = [(0, -0.36), (0.38, -0.3), (0.72, -0.05), (0.78, 0.22), (0.45, 0.48), (-0.45, 0.48),
-               (-0.78, 0.22), (-0.72, -0.05), (-0.38, -0.3)]
-    poly = [(x * s, y * s) for x, y in outline]
-    V, F = loft(poly, [(0.88, -1.0), (1.0, -0.2), (0.95, 0.45), (0.7, 1.05)])
-    hull = part(root, V, F, HULL_BLACK)
-    neon_edges(hull, (0.5, 0.05, 0.04, 0.3), 1.0)
+    s = width / 14.0
+    hull = [(5.0, 5.0 * s, 0.95, 0.0, 3.6), (3.6, 7.0 * s, 1.3, 0.1, 3.6), (1.5, 6.6 * s, 1.55, 0.2, 3.3),
+            (-0.8, 4.6 * s, 1.45, 0.2, 3.0), (-2.8, 2.4 * s, 1.05, 0.15, 2.7), (-4.3, 0.9 * s, 0.6, 0.1, 2.4),
+            (-5.0, 0.12, 0.12, 0.05, 2.0)]
+    V, F = sweep(hull, 48)
+    part(root, V, F, (1, 1, 1), orient=None, vcol=hull_paint(-1.3, 1.75))
+    keel = [(4.6, 3.6 * s, 0.7, -1.2, 3.0), (1.0, 4.6 * s, 0.95, -1.35, 3.0), (-2.5, 1.9 * s, 0.7, -1.0, 2.6),
+            (-3.9, 0.4, 0.3, -0.7, 2.2)]
+    Vk, Fk = sweep(keel, 40)
+    part(root, Vk, Fk, (1, 1, 1), orient=None, vcol=hull_paint(-2.2, -0.6))
     rng = np.random.default_rng(11)
     zones = mothership_layout(width)
-    for sgn in (1, -1):
-        # forward claws (zone 1)
-        claw = [(sgn * 0.62 * s, -0.1 * s), (sgn * 1.0 * s, -0.3 * s), (sgn * 0.93 * s, -0.68 * s), (sgn * 0.7 * s, -0.36 * s)]
-        Vc, Fc = loft(claw if sgn > 0 else claw[::-1], [(1, -0.6), (1, 0.4)])
-        c = part(root, Vc, Fc, BLOOD)
-        neon_edges(c, (0.6, 0.08, 0.05, 0.35), 1.0)
-        tip = [(sgn * 0.93 * s, -0.68 * s), (sgn * 0.97 * s, -0.9 * s), (sgn * 0.84 * s, -0.6 * s)]
-        Vt, Ft = loft(tip if sgn > 0 else tip[::-1], [(1, -0.3), (1, 0.2)])
-        part(root, Vt, Ft, BONE)
-        for k in range(4):  # spikes along the rear edge
-            x = sgn * (3.4 + k * 0.7)
-            Vk, Fk = pyramid([(x - 0.2, 2.0 - k * 0.35), (x + 0.2, 2.0 - k * 0.35), (x, 2.35 - k * 0.35)],
-                             (x + sgn * 0.3, 3.2 - k * 0.4, 1.0))
-            part(root, Vk, Fk, BONE, pos=(0, 0, 0.6))
-        for k in range(4):  # gun ports along the claws
-            px = sgn * (2.2 + k * 1.1)
-            Vg, Fg = box(0.35, 0.35, 0.25)
-            part(root, Vg, Fg, (0.16, 0.08, 0.09), pos=(px, -0.25 * s + k * 0.1 - 0.2, 0.3))
-            glow(root, (px, -0.25 * s + k * 0.1 - 0.45, 0.35), 0.4, (*EMBER, 0.8))
-        glow(root, (sgn * 3.2, 3.4, 0.0), 1.8, (0.8, 0.1, 0.04, 0.7))
-    # bone ribs over the hull, vents glow in zone 2, armour plates in zone 1
-    for k in range(7):
-        y = -1.2 + k * 0.65
-        Vr, Fr = box(width * (0.5 - k * 0.035), 0.12, 0.12)
-        part(root, Vr, Fr, (0.27, 0.24, 0.2), pos=(0, y, 1.08))
-    for _ in range(60):
-        x = rng.uniform(-0.75, 0.75) * s
-        y = rng.uniform(-0.15, 0.32) * s
+
+    def pick(x, y):
         ax = abs(x)
-        if ax < zones[3] + 0.3:
+        if ax < zones[3] + 0.4 and y < 1.5:
+            return (0.09, 0.09, 0.1)
+        r = rng.random()
+        if zones[3] < ax < zones[4] and r < 0.12:
+            return (1.0, 0.35, 0.06, 1, 1)  # zone 2: glowing vents (5-tuple = emissive)
+        if r < 0.035:
+            return (*SICK_GREEN, 1, 1)
+        return ((0.08, 0.08, 0.09), (0.13, 0.12, 0.12), (0.18, 0.16, 0.15), (0.11, 0.07, 0.06))[rng.integers(4)]
+
+    greebles(root, hull, 520, rng, pick, size=(0.1, 0.45), height=(0.03, 0.22))
+    greebles(root, hull, 400, rng, None, size=(0.03, 0.12), height=(0.02, 0.08))
+    for k in range(6):  # long conduits along the hull
+        x = (-5.5 + k * 2.2) * s
+        if abs(x) < 1.0:
             continue
-        Vb, Fb = box(rng.uniform(0.25, 0.7), rng.uniform(0.2, 0.5), rng.uniform(0.08, 0.3))
-        if ax > zones[4]:
-            part(root, Vb, Fb, (0.14, 0.1, 0.11), pos=(x, y, 1.1))
-        elif rng.random() < 0.45:
-            part(root, Vb, Fb, (0.9, 0.22, 0.05), pos=(x, y, 1.05), unlit=True)
-        else:
-            part(root, Vb, Fb, (0.2, 0.06, 0.07), pos=(x, y, 1.1))
-    # dorsal spine along the rear
-    Vd, Fd = prism([(0.0, 0.2), (0.0, 3.4), (1.6, 3.0), (1.0, 0.6)], 0.25)
-    part(root, Vd[:, [2, 1, 0]], Fd, BLOOD, pos=(0, 0, 1.05))
-    for k in range(5):
-        glow(root, (0, 0.8 + k * 0.5, 1.2), 0.35, (*EMBER, 0.7))
-    # throne chamber of "the Mother" (zone 3): a dark lens with a vertical slit pupil
+        pts = [(x * (1 - 0.15 * j / 5), 4.2 - j * 1.4, 0) for j in range(6)]
+        pts = [(px, py, (sweep_top(hull, px, py) or 0.3) + 0.05) for px, py, _ in pts if sweep_top(hull, px, py)]
+        if len(pts) > 2:
+            Vt, Ft = tube_mesh(pts, 0.09, 10)
+            part(root, Vt, Ft, (0.1, 0.09, 0.09), orient=None)
+    Vi, Fi = icosphere(2)
+    for sgn in (1, -1):
+        for k in range(5):  # turrets along the leading edges
+            y = -3.6 + k * 1.1
+            x = sgn * (0.9 + k * 0.85) * s
+            z = sweep_top(hull, x, y) or 0.3
+            Vt, Ft = lathe([(0.22, 0.0), (0.24, 0.12), (0.16, 0.22)], 14, "z")
+            part(root, Vt, Ft, (0.12, 0.11, 0.11), pos=(x, y, z), orient="z")
+            Vc, Fc = lathe([(0.04, 0.0), (0.04, -0.55)], 8, "y")
+            part(root, Vc, Fc, (0.08, 0.08, 0.08), pos=(x, y, z + 0.13), orient="y")
+            glow(root, (x, y - 0.6, z + 0.13), 0.35, (*EMBER, 0.85))
+        for k in range(5):  # rear spikes
+            x = sgn * (1.5 + k * 1.1) * s
+            Vk, Fk = lathe([(0.18, 0.0), (0.0, 1.2 + 0.3 * (k % 2))], 8, "y")
+            part(root, Vk, Fk, (1, 1, 1), pos=(x, 4.6 - k * 0.25, 0.3), hpr=(sgn * -8, 12, 0), orient="y",
+                 vcol=hull_paint(0, 0.6))
+    for k in range(5):  # engine bank
+        x = (-2.4 + k * 1.2) * s
+        Vn, Fn = lathe([(0.35, 4.9), (0.45, 5.2), (0.55, 5.4)], 18, "y")
+        part(root, Vn, Fn, (0.07, 0.07, 0.08), pos=(x, 0, 0), orient="y", two_sided=True)
+        glow(root, (x, 5.5, 0), 1.3, (1.0, 0.15, 0.04, 0.85))
+    # bridge tower (zone 3) with the Mother behind red glass
+    tower = [(1.8, 0.55 * s, 0.4, 1.9, 3.0), (0.2, 0.7 * s, 0.62, 2.05, 3.0), (-0.8, 0.66 * s, 0.55, 2.0, 2.8),
+             (-1.3, 0.4 * s, 0.35, 1.9, 2.5)]
+    Vt, Ft = sweep(tower, 32)
+    part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(1.4, 2.7))
+    build_catlien(root, 0.5, queen=True).setPos(0, -1.1, 2.02)
+    glow(root, (0, -0.55, 2.45), 1.5, (1.0, 0.06, 0.03, 0.6))  # backlit throne
     Vh, Fh = hemisphere(3)
-    part(root, Vh * np.array([0.75, 0.8, 0.42]), Fh, (0.16, 0.02, 0.02), pos=(0, -2.0, 0.95))
-    Vs, Fs = hemisphere(2)
-    part(root, Vs * np.array([0.15, 0.7, 0.46]), Fs, (1.0, 0.6, 0.12), pos=(0, -2.0, 0.97), unlit=True)
-    Vi, Fi = annulus(0.45, 0.6, seg=48, rings=2)
-    part(root, Vi, Fi, (0.9, 0.15, 0.03), pos=(0, -2.0, 1.33), unlit=True, orient=None, two_sided=True).setScale(1.2, 1.25, 1)
-    glow(root, (0, -2.0, 1.3), 2.0, (1.0, 0.2, 0.04, 0.75))
+    part(root, Vh * np.array([0.62 * s, 0.7, 0.85]), Fh, (0.9, 0.3, 0.2, 0.15), pos=(0, -1.25, 2.2),
+         alpha=True, two_sided=True)
+    Vr, Fr = lathe([(1.0, 0.0), (1.05, 0.03), (1.0, 0.07)], 32, "z")  # bridge window rim
+    part(root, Vr, Fr, (0.07, 0.07, 0.07), pos=(0, -1.25, 2.17), scale=(0.62 * s, 0.7, 1), orient="z")
+    glow(root, (0, 0, -0.9), 6.0, (0.6, 0.05, 0.03, 0.35))
     return root
 
 
@@ -747,18 +1003,6 @@ def build_helmet(parent):
         p = (tip[0] + 0.06 * k + rng.uniform(-0.05, 0.05), tip[1] - 0.02 * k, tip[2] + 0.12 + 0.17 * k)
         glow(root, p, 0.18 + 0.07 * k, (0.75, 0.75, 0.8, 0.22 - 0.025 * k))
     return root
-
-
-def tube(root, ctrl, radius, color, n=12, band=None, glowing=False):
-    """Hose along a cubic bezier, built from overlapping low-poly beads."""
-    Vi, Fi = icosphere(1)
-    color = _rgba(color)
-    for k, p in enumerate(_bezier(ctrl, n)):
-        col = band if (band is not None and k % 4 == 2) else color
-        part(root, Vi * radius, Fi, col, pos=tuple(p), unlit=glowing, alpha=color[3] < 1)
-    if glowing:
-        for p in _bezier(ctrl, 4):
-            glow(root, tuple(p), radius * 5, (color[0], color[1], color[2], 0.5))
 
 
 def _bezier(ctrl, n):
