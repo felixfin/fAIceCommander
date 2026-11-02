@@ -3,7 +3,7 @@ MusicDirector fades in and out (drums, bass, arp, pad, lead, heartbeat ...)."""
 import numpy as np
 
 from .synth import (
-    BAR, BEAT, STEP, Mixer, clap, crash, fade, hat, kick, lp, master, noise, note, pad_tail, reverb, rng, saw, sine,
+    BAR, BEAT, STEP, Mixer, bp, clap, crash, fade, hat, kick, lp, master, noise, note, pad_tail, reverb, rng, saw, sine,
     snare, square, sweep_lp, t_arr,
 )
 
@@ -186,10 +186,150 @@ def track_debris():
     return stems
 
 
+def _halftime_drums(m, bar, fill=False):
+    t0 = bar * BAR
+    K, S = kick(1.3), snare(170, 6000)
+    m.add(t0, K, 1.0)
+    m.add(t0 + 11 * STEP, K, 0.8)
+    m.add(t0 + 8 * STEP, S, 0.85)
+    m.add(t0 + 8 * STEP, clap(), 0.4)
+    for st in range(0, 16, 2):
+        m.add(t0 + st * STEP + (0.01 if st % 4 else 0), hat(), 0.16, 0.3)
+    if fill:
+        for k, st in enumerate((12, 13, 14, 15)):
+            m.add(t0 + st * STEP, S, 0.3 + 0.12 * k)
+    if bar % 8 == 0:
+        m.add(t0, crash(), 0.22)
+
+
+def track_hypno():
+    """Level 3: mysterious and sparse - soft broken beat, pulsing sub, glassy arps. Ducked during a pulse."""
+    rng(4)
+    st = {k: Mixer(LOOP) for k in ("drums", "bass", "arp", "pad", "lead")}
+    roots = ["E1", "E1", "C2", "C2", "A1", "A1", "B1", "B1"] * 2
+    seq = ["E5", None, "B4", None, "G5", None, "Gb5", None] * 2
+    for b in range(BARS):
+        t0 = b * BAR
+        for s0 in (0, 7, 10):
+            st["drums"].add(t0 + s0 * STEP, kick(0.7), 0.7)
+        st["drums"].add(t0 + 12 * STEP, snare(220, 9000), 0.35)
+        for s0 in range(0, 16, 3):
+            st["drums"].add(t0 + s0 * STEP, hat(), 0.12, -0.3 if s0 % 2 else 0.3)
+        f = note(roots[b])
+        for s0 in (0, 8):
+            t = t_arr(STEP * 7.5)
+            sub = sine(f, t) * np.minimum(1, t / 0.02) * np.exp(-t * 1.2)
+            st["bass"].add(t0 + s0 * STEP, lp(np.tanh(sub * 1.5 + saw(f, t) * 0.15), 300), 0.5)
+        arp(st["arp"], b, seq, 0.12, cutoff=5000)
+    chords = [("E3", "B3", "G4", "D5"), ("C3", "G3", "E4", "B4"), ("A2", "E3", "C4", "G4"), ("B2", "Gb3", "D4", "A4")]
+    for i in range(BARS // 2):
+        supersaw_pad(st["pad"], i * 2 * BAR, 2 * BAR + 0.5, [note(n) for n in chords[i % 4]], 0.03, cutoff=900)
+    for rep in range(2):
+        for n, s0, ln in (("B4", 0, 12), ("G4", 12, 4), ("A4", 16, 16), ("E5", 32, 12), ("D5", 44, 4), ("B4", 48, 16)):
+            lead(st["lead"], rep * 8 * BAR + s0 * STEP * 2, ln * STEP * 2 * 0.95, note(n), 0.06, vibrato=3.0)
+    stems = master({k: m.buf for k, m in st.items()})
+    stems["heartbeat"] = heartbeat_stem(44) * 0.5
+    return stems
+
+
+def track_void_brains():
+    """Level 4: dark ambient for the void - drone, sub pulses, whispers, heartbeat."""
+    rng(5)
+    np.random.seed(5)
+    st = {k: Mixer(LOOP) for k in ("drone", "pulse", "whispers", "pad")}
+    t = t_arr(LOOP)
+    drone = sine(note("D1"), t) * 0.6 + saw(note("D2") * 1.003, t) * 0.12 + saw(note("A2") * 0.997, t) * 0.08
+    drone = lp(drone, 260) * (0.7 + 0.3 * np.sin(2 * np.pi * t / LOOP * 4))
+    st["drone"].add(0, drone, 1.0)
+    for b in range(BARS):
+        tb = t_arr(1.2)
+        thump = sine(38 + 20 * np.exp(-tb * 10), tb) * np.exp(-tb * 3)
+        st["pulse"].add(b * BAR, thump, 0.8)
+    for k in range(10):  # whispers: formant-filtered noise drifting across the stereo field
+        dur = 1.2 + 0.8 * np.random.random()
+        tw = t_arr(dur)
+        f1 = 500 + 900 * np.random.random()
+        w = bp(noise(len(tw)), f1, f1 * 1.6) * np.sin(np.pi * tw / dur) ** 2 * (0.6 + 0.4 * np.sin(2 * np.pi * 7 * tw))
+        st["whispers"].add(k * LOOP / 10 + np.random.random(), reverb(pad_tail(w, 1.0), 0.6), 0.5,
+                           np.random.uniform(-0.8, 0.8))
+    for i, ch in enumerate((("D3", "F3", "A3", "C4"), ("Bb2", "D3", "F3", "A3"))):
+        supersaw_pad(st["pad"], i * 8 * BAR, 8 * BAR + 0.5, [note(n) for n in ch], 0.025, cutoff=600, pan_spread=0.5)
+    stems = master({k: m.buf for k, m in st.items()}, 0.75)
+    stems["heartbeat"] = heartbeat_stem(55) * 0.6
+    return stems
+
+
+def track_patrol():
+    """Level 5: darksynth - half-time drums, driving 16th octave bass, cold stabs, a stabbing lead."""
+    rng(6)
+    st = {k: Mixer(LOOP) for k in ("drums", "bass", "arp", "pad", "lead")}
+    roots = ["A1", "A1", "F1", "F1", "D1", "D1", "E1", "E1"] * 2
+    chords = {"A1": ("A3", "C4", "E4"), "F1": ("F3", "A3", "C4"), "D1": ("D3", "F3", "A3"), "E1": ("E3", "Ab3", "B3")}
+    for b in range(BARS):
+        _halftime_drums(st["drums"], b, fill=(b % 4 == 3))
+        f = note(roots[b])
+        for s0 in range(16):
+            t = t_arr(STEP * 0.9)
+            ff = f * (2 if s0 % 2 else 1)
+            s = lp(saw(ff, t) + saw(ff * 1.005, t), 700 + 500 * (s0 % 4 == 0)) * np.exp(-t * 7)
+            st["bass"].add(b * BAR + s0 * STEP, s, 0.22)
+        for s0 in (0, 3, 6, 10, 12):
+            t = t_arr(STEP * 1.2)
+            stab = sum(square(note(c), t, 0.3) for c in chords[roots[b]])
+            st["arp"].add(b * BAR + s0 * STEP, lp(stab * np.exp(-t * 10), 2200), 0.05, -0.3 if s0 % 2 else 0.3)
+    for i in range(BARS // 4):
+        supersaw_pad(st["pad"], i * 4 * BAR, 4 * BAR + 0.5,
+                     [note(n) for n in (("A2", "E3", "C4", "G4"), ("F2", "C3", "A3", "E4"))[i % 2]], 0.03)
+    for rep in range(2):
+        for n, s0, ln in (("E5", 0, 6), ("D5", 6, 2), ("C5", 8, 8), ("A4", 16, 8), ("C5", 24, 4), ("D5", 28, 4),
+                          ("E5", 32, 6), ("G5", 38, 2), ("F5", 40, 8), ("E5", 48, 16)):
+            lead(st["lead"], rep * 8 * BAR + s0 * STEP * 2, ln * STEP * 2 * 0.95, note(n), 0.07, vibrato=6.0)
+    stems = master({k: m.buf for k, m in st.items()})
+    stems["heartbeat"] = heartbeat_stem(66) * 0.5
+    return stems
+
+
+def track_event_horizon():
+    """Level 6: half-time dubstep - slow wobbles, sub pressure, ominous pads, a long falling horn."""
+    rng(7)
+    st = {k: Mixer(LOOP) for k in ("drums", "bass", "arp", "pad", "lead")}
+    roots = ["C2", "C2", "Ab1", "Ab1", "F1", "F1", "G1", "G1"] * 2
+    rates = (4, 2, 3, 1.5)
+    for b in range(BARS):
+        _halftime_drums(st["drums"], b, fill=(b % 8 == 7))
+        f = note(roots[b])
+        wobble(st["bass"], b * BAR, BAR * 0.5 * 0.98, f, rates[b % 4], 0.3)
+        wobble(st["bass"], b * BAR + BAR * 0.5, BAR * 0.5 * 0.98, f * (1.5 if b % 2 else 1), rates[(b + 1) % 4], 0.3,
+               bend=0.4 if b % 4 == 3 else 0.0)
+        for s0 in (2, 10):
+            t = t_arr(STEP * 1.5)
+            st["arp"].add(b * BAR + s0 * STEP, lp(sine(note("C6"), t) * np.exp(-t * 9), 6000), 0.13,
+                          0.4 if s0 == 2 else -0.4)
+    for i in range(BARS // 4):
+        supersaw_pad(st["pad"], i * 4 * BAR, 4 * BAR + 0.5,
+                     [note(n) for n in (("C3", "G3", "Eb4", "Bb4"), ("Ab2", "Eb3", "C4", "G4"))[i % 2]], 0.03,
+                     cutoff=900)
+    for rep in range(4):
+        t0 = rep * 4 * BAR + 2 * BAR
+        t = t_arr(2 * BAR)
+        f = note("G4") * 2 ** (-(t / (2 * BAR)) * 7 / 12)
+        s = lp(saw(f, t) + saw(f * 1.006, t), 1600) * np.minimum(1, t / 0.3) * np.minimum(1, (2 * BAR - t) / 0.4)
+        st["lead"].add(t0, reverb(pad_tail(s, 1.5), 0.4), 0.11)
+    stems = master({k: m.buf for k, m in st.items()})
+    stems["heartbeat"] = heartbeat_stem(77) * 0.5
+    return stems
+
+
 TRACKS = {
     "void": track_void,
     "neural_breaks": track_neural_breaks,
     "debris": track_debris,
+    "hypno": track_hypno,
+    "void_brains": track_void_brains,
+    "patrol": track_patrol,
+    "event_horizon": track_event_horizon,
 }
 
-TITLES = {"void": "THE VOID", "neural_breaks": "NEURAL BREAKS", "debris": "DEBRIS RUNNER"}
+TITLES = {"void": "THE VOID", "neural_breaks": "NEURAL BREAKS", "debris": "DEBRIS RUNNER",
+          "hypno": "HYPNO NEBULA", "void_brains": "NOTHING ANSWERS", "patrol": "PATROL",
+          "event_horizon": "EVENT HORIZON"}

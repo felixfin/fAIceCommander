@@ -10,6 +10,7 @@ class Level:
     unlocked = ("laser", "shield")
     nukes = 0
     banner = "Reach the next star"
+    hypno = None   # HypnoCycle in levels with hypno pulses
 
     def __init__(self, world, data):
         self.world = world
@@ -17,6 +18,7 @@ class Level:
         self.name = data["name"]
         self.music = data.get("music", "neural_breaks")
         self.duration = data.get("duration_s", 90)
+        self.void = data.get("void", False)
         self.elapsed = 0.0
 
     @property

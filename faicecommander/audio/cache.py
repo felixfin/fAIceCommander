@@ -9,7 +9,7 @@ from scipy.io import wavfile
 from . import sfx_bank, tracks
 from .synth import SR
 
-AUDIO_VERSION = "m2-1"  # bump when the synth code changes to re-render the cache
+AUDIO_VERSION = "m3-1"  # bump when the synth code changes to re-render the cache
 
 
 def cache_dir():
@@ -20,10 +20,16 @@ def cache_dir():
 
 
 def _write(path, data):
-    tmp = path.with_suffix(".tmp")
+    """Atomic write; safe when several game instances fill the cache at the same time."""
+    tmp = path.with_name(f"{path.stem}.{os.getpid()}.tmp")
     with open(tmp, "wb") as f:
         wavfile.write(f, SR, (np.clip(data, -1, 1) * 32767).astype(np.int16))
-    tmp.replace(path)
+    try:
+        tmp.replace(path)
+    except OSError:  # another instance wrote (and may be playing) the same file already
+        tmp.unlink(missing_ok=True)
+        if not path.exists():
+            raise
 
 
 def sfx_path(name):
@@ -72,9 +78,10 @@ class MusicBuilder:
                 if name in self.done:
                     continue
                 self.current = name
-                for stem, data in fn().items():
-                    _write(stem_path(name, stem), data)
-                self._marker(name).touch()
+                if not self._marker(name).exists():  # another instance may have finished it meanwhile
+                    for stem, data in fn().items():
+                        _write(stem_path(name, stem), data)
+                    self._marker(name).touch()
                 self.done.add(name)
             self.current = None
         except Exception as e:  # never take the game down because of music

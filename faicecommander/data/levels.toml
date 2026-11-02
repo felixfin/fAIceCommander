@@ -29,3 +29,69 @@ fragment_speed_px = [60, 170]
 score_per_kill = 100
 score_per_large = 250
 score_per_second = 10
+
+[level_03]
+name = "Hypno Nebula"
+music = "hypno"
+duration_s = 90
+asteroid_count = [1, 2]       # less dense: one or two at a time
+asteroid_size_px = [10, 30]
+asteroid_speed_px = [30, 120]
+asteroid_spread_deg = 45
+damage_percent = 25
+score_per_kill = 100
+score_per_second = 10
+score_per_pulse = 500         # survived a pulse with closed eyes
+pulse_warning_s = 3
+pulse_duration_s = 10
+pulse_first_s = 12
+pulse_interval_s = [22, 30]   # calm time between pulses
+eyes_grace_s = 0.5            # time to close your eyes after the pulse hits
+
+[level_04]
+name = "The Void"
+music = "void_brains"
+void = true                   # no stars, no nebula
+duration_s = 60
+max_brains = 10
+brain_spawn_per_s = 4.0
+brain_life_s = [1.0, 3.0]
+brain_size_px = 13            # about a quarter of the ship
+brain_keepout_px = 110        # never form this close to the ship
+damage_percent = 5
+score_per_kill = 50
+score_per_second = 15
+
+[level_05]
+name = "Patrol"
+music = "patrol"
+asteroid_count = [1, 3]
+asteroid_size_px = [10, 30]
+asteroid_speed_px = [30, 120]
+asteroid_spread_deg = 45
+damage_percent = 25
+raiders = 2
+raider_speed_px = 220
+raider_fire_interval_s = [1.3, 2.4]
+raider_shot_speed_px = 420
+shot_damage_percent = 10
+score_per_kill = 100
+score_per_raider = 1000
+score_per_second = 5
+
+[level_06]
+name = "Event Horizon"
+music = "event_horizon"
+duration_s = 90
+asteroid_count = 3
+asteroid_size_px = [10, 30]
+asteroid_speed_px = [30, 140]
+asteroid_spread_deg = 55
+damage_percent = 25
+score_per_kill = 100
+score_per_second = 12
+hole_chance_per_s = 0.08      # chance per second that a black hole appears (max one at a time)
+hole_first_s = 6
+hole_radius_px = 18           # event horizon: touching it means game over
+hole_pull = 60.0              # drift speed towards the hole = pull / distance^2 (units)
+hole_speed_px = [40, 90]      # own approach speed on top of the scroll

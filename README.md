@@ -3,10 +3,11 @@
 A 3D space shooter you steer with your face: tilt your head to slide left and right, turn it to
 switch weapons, open your mouth to fire, close your eyes to survive hypno pulses.
 
-Status: **milestone 2** - face controls with calibration, levels 1 (Asteroid Belt) and 2 (Debris Field),
-all four weapons (laser, beam, nukes, shield), explosions that are heard when their shockwave reaches you,
-procedural sound effects and an adaptive drum & bass soundtrack, HUD, webcam panel with the AR helmet,
-fullscreen. Levels 3-7, intro, outro, highscores and Easy/Hard selection follow in the next milestones.
+Status: **milestone 3** - face controls with calibration and six levels: Asteroid Belt, Debris Field,
+Hypno Nebula (close your eyes during hypno pulses, fly by sonar), The Void (Boltzmann brains that burst
+messily), Patrol (two Catlien raiders that hunt you) and Event Horizon (black holes that pull you in).
+All four weapons, shockwave-timed explosions, procedural sound effects and an adaptive soundtrack with a
+track per level. Level 7 (the mothership), intro, outro, highscores and Easy/Hard selection follow next.
 
 On first launch the soundtrack is synthesized once (a few seconds) into
 `%LOCALAPPDATA%\fAIceCommander3D\audio`; the panel shows the progress.
@@ -26,7 +27,7 @@ py -3.12 -m venv .venv
 .venv\Scripts\python -m faicecommander              # fullscreen, webcam
 .venv\Scripts\python -m faicecommander --windowed   # in a window
 .venv\Scripts\python -m faicecommander --no-camera  # keyboard only
-.venv\Scripts\python -m faicecommander --level 2    # practice a level directly
+.venv\Scripts\python -m faicecommander --level 3    # practice a level directly (1-6)
 ```
 
 ## Controls

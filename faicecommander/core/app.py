@@ -17,6 +17,7 @@ from ..input.keyboard import KeyboardControls
 from ..render.backdrop import Backdrop
 from ..render.effects import ScreenFlash
 from ..render.hud import Hud
+from ..render.overlays import HypnoOverlay, SplatterOverlay
 from ..render.webcam_view import WebcamView
 from .states import TitleState
 
@@ -42,6 +43,9 @@ class App(ShowBase):
         self.hud = Hud(self)
         self.flash = ScreenFlash(self.render2d)
         self.backdrop = Backdrop(self.render, self.camera, seed=3)
+        self.hypno_overlay = HypnoOverlay(self.camera)
+        self.splatter = SplatterOverlay(self.camera, cfg["effects.splatter_s"])
+        self.hypno_alpha = 0.0
         self.world = World(self, cfg)
         self.audio = AudioSystem(self, cfg)
         self.level_count = len(LEVELS)
@@ -208,7 +212,7 @@ class App(ShowBase):
             ctl = kb
             self._last_keyboard = time.monotonic()
         if self.autopilot:
-            ctl = self.autopilot.update(dt, self.world)
+            ctl = self.autopilot.update(dt, self.world, getattr(getattr(self.state, "level", None), "hypno", None))
         self.state.update(dt, face, ctl)
         self.webcam.update(face, ctl)
         self.hud.set_gauges(ctl)
@@ -220,6 +224,8 @@ class App(ShowBase):
             self.hud.set_status(f"KEYBOARD MODE ({why})\nA/D steer · SPACE mouth · Q/E weapon · C eyes")
         self.hud.set_track(self.audio.music.title, self.audio.builder.progress, self.audio.muted)
         self.flash.update(dt)
+        self.hypno_overlay.update(dt, self.hypno_alpha)
+        self.splatter.update(dt)
         self.audio.update(dt)
         self.shake_amount = max(0.0, self.shake_amount - dt * 2.5)
         s = self.shake_amount ** 2 * 0.35
@@ -243,10 +249,10 @@ class Autopilot:
         self.t = 0.0
         self.mouth = False
 
-    def update(self, dt, world):
+    def update(self, dt, world, hypno=None):
         self.t += dt
         ship = world.ship
-        targets = [a for a in world.asteroids if a.y > ship.y]
+        targets = [a for a in world.targets if a.y > ship.y]
         steer = 0.0
         if targets:
             a = min(targets, key=lambda a: a.y)
@@ -254,7 +260,8 @@ class Autopilot:
         was = self.mouth
         self.mouth = (self.t % 0.5) < 0.25
         step = 1 if int(self.t / 3) != int((self.t - dt) / 3) else 0  # cycle through the weapons
+        eyes = hypno is not None and hypno.phase in ("warning", "pulse")  # a good pilot closes their eyes
         ctl = Controls(steer=steer, mouth_open=self.mouth, mouth_pressed=self.mouth and not was, weapon_step=step,
-                       tracked=True)
+                       eyes_closed=eyes, tracked=True)
         ctl.tilt_gauge, ctl.mouth_gauge = steer, float(self.mouth)
         return ctl

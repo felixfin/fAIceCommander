@@ -28,6 +28,52 @@ class EffectTemplates:
         for r, col in ((0.07, (0.85, 1.0, 0.95, 0.95)), (0.18, (0.3, 1.0, 0.8, 0.55)), (0.38, (0.2, 0.9, 0.7, 0.22))):
             Vb, Fb = M.lathe([(r, 0.0), (r, 1.0)], 10, "y")
             M.part(self.beam, Vb, Fb, col, additive=True, orient=None)
+        # brain burst: lumpy pink chunks and dark red droplets
+        rng = np.random.default_rng(9)
+        Vi, Fi = M.icosphere(1)
+        self.chunks = [M.part(self.store, Vi * (1 + 0.35 * rng.normal(size=(len(Vi), 1))), Fi,
+                              (0.9, 0.45 + 0.1 * k, 0.55)) for k in range(3)]
+        self.drop = M.part(self.store, Vi * np.array([1.0, 2.5, 1.0]), Fi, (0.45, 0.01, 0.03))
+
+
+class BrainBurst:
+    """A shot Boltzmann brain bursting: chunks, blood droplets, red mist."""
+
+    def __init__(self, parent, templates, pos, size, rng, duration=1.1):
+        self.root = parent.attachNewNode("brain-burst")
+        self.root.setPos(*pos)
+        self.t, self.duration = 0.0, duration
+        self.mist = M.glow(self.root, (0, 0, 0), 1.0, (0.65, 0.0, 0.03, 0.8))
+        self.parts = []
+        for k in range(26):
+            d = rng.normal(size=3)
+            d /= np.linalg.norm(d)
+            speed = rng.uniform(1.5, 5.0) * size
+            if k < 10:
+                node = templates.chunks[int(rng.integers(len(templates.chunks)))].copyTo(self.root)
+                s0 = rng.uniform(0.06, 0.16) * size
+            else:
+                node = templates.drop.copyTo(self.root)
+                s0 = rng.uniform(0.03, 0.06) * size
+                node.lookAt(tuple(d))
+            node.setScale(s0)
+            self.parts.append((node, d * speed, rng.uniform(-400, 400, 3) if k < 10 else None, s0))
+
+    def update(self, dt):
+        self.t += dt
+        u = self.t / self.duration
+        if u >= 1:
+            self.root.removeNode()
+            return False
+        shrink = max(0.01, 1 - max(0.0, u - 0.6) / 0.4)
+        for node, v, spin, s0 in self.parts:
+            node.setPos(*(v * self.t * (1 - 0.35 * u)))
+            node.setScale(s0 * shrink)
+            if spin is not None:
+                node.setHpr(*(spin * self.t))
+        self.mist.setScale(0.8 + 2.5 * u)
+        self.mist.setColor(0.65, 0.0, 0.03, 0.8 * (1 - u))
+        return True
 
 
 class Explosion:

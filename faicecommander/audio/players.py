@@ -3,8 +3,10 @@ from panda3d.core import AudioSound, Filename
 
 from . import cache, sfx_bank, tracks
 
-POOL_SIZES = {"laser": 6, "boom_small": 5, "boom_big": 3, "thud": 3, "crack": 3, "switch": 2, "empty": 2}
-LOOPS = {"beam": "beam_loop", "shield": "shield_loop"}
+POOL_SIZES = {"laser": 6, "boom_small": 5, "boom_big": 3, "thud": 3, "crack": 3, "switch": 2, "empty": 2,
+              "splat": 4, "brain_spawn": 4, "enemy_shot": 4, "metal_hit": 4,
+              "sonar_l2": 2, "sonar_l1": 2, "sonar_c": 2, "sonar_r1": 2, "sonar_r2": 2}
+LOOPS = {"beam": "beam_loop", "shield": "shield_loop", "hypno": "hypno_loop", "blackhole": "blackhole_loop"}
 
 
 def _load(base, path):
@@ -64,6 +66,7 @@ class MusicDirector:
         self.layers = {}
         self.duck = 1.0
         self._duck_target = 1.0
+        self.rate = 1.0
 
     @property
     def title(self):
@@ -82,6 +85,13 @@ class MusicDirector:
     def set_duck(self, factor):
         self._duck_target = factor
 
+    def set_rate(self, rate):
+        """Play rate for all stems of the current track (same rate keeps them in sync): < 1 sounds deeper."""
+        if abs(rate - self.rate) > 0.002 and self.current in self.loaded:
+            self.rate = rate
+            for sound in self.loaded[self.current].values():
+                sound.setPlayRate(rate)
+
     def _load(self, track):
         if track not in self.loaded:
             sounds = {}
@@ -98,7 +108,9 @@ class MusicDirector:
             stems = self._load(self.wanted)
             for s in stems.values():  # start all stems together so they stay in sync
                 s.setTime(0)
+                s.setPlayRate(1.0)
                 s.play()
+            self.rate = 1.0
             self.current, self.wanted = self.wanted, None
         self.duck += (self._duck_target - self.duck) * min(1.0, dt * 3)
         step = dt / self.fade_s

@@ -41,17 +41,22 @@ class Ship:
     def prow_y(self):
         return self.y + 2.25 * self.scale
 
-    def update(self, dt, steer, half_width):
+    def update(self, dt, steer, half_width, drift=0.0):
+        """drift: sideways speed forced on the ship (black hole pull), added to its own movement."""
         self.t += dt
         self.hit_cooldown = max(0.0, self.hit_cooldown - dt)
         target = 0.0 if self.frozen else steer * self.max_speed
         self.vx += (target - self.vx) * min(1.0, dt * 7.0)
-        self.x = max(-half_width, min(half_width, self.x + self.vx * dt))
+        self.x = max(-half_width, min(half_width, self.x + (self.vx + drift) * dt))
         if abs(self.x) >= half_width:
             self.vx = 0.0
         bank = self.vx / self.max_speed * 28.0
         self.node.setPos(self.x, self.y, 0.08 * math.sin(self.t * 2.1))
         self.model.setHpr(-self.vx / self.max_speed * 6.0, 0, bank)
+        if self.frozen:  # iced over by a hypno pulse
+            self.model.setColorScale(0.55, 0.8, 1.5, 1)
+        else:
+            self.model.clearColorScale()
         if self.shield_on:
             self.shield.show()
             self.shield.setAlphaScale(0.75 + 0.25 * math.sin(self.t * 9))

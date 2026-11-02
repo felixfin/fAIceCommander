@@ -17,6 +17,7 @@ class AsteroidLibrary:
 
 
 class Asteroid:
+    kind = "asteroid"
     def __init__(self, parent, library, rng, x, y, radius, vx, vy, category, resist, damage, score):
         pool = library.rocks[category]
         self.node = pool[int(rng.integers(len(pool)))].copyTo(parent)

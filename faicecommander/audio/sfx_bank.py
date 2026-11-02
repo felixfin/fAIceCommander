@@ -126,12 +126,93 @@ def alarm():
     return _norm((square(740, t, 0.5) * (t < 0.15) + square(560, t, 0.5) * (t >= 0.17)) * 0.6 * np.exp(-t * 3), 0.4)
 
 
+def siren():
+    """Hypno pulse warning, 3 s: rising and falling two-tone with an eerie shimmer."""
+    t = t_arr(3.0)
+    f = 520 + 320 * (0.5 - 0.5 * np.cos(2 * np.pi * t / 1.0))
+    s = sine(f, t) + 0.4 * square(f * 0.5, t, 0.3) + 0.2 * sine(f * 3.01, t)
+    s = lp(s, 3000) * np.minimum(1, t / 0.1) * np.minimum(1, (3.0 - t) / 0.2)
+    return _norm(reverb(s, 0.35), 0.6)
+
+
+def hypno_loop():
+    """2 s seamless loop while a pulse is active: slow beating drone."""
+    t = t_arr(2.0)
+    s = sine(110, t) + sine(110.5 * 2, t) * 0.5 + sine(165, t) * 0.4 + sine(55, t) * 0.6
+    s *= 0.7 + 0.3 * sine(1.5, t)
+    return _norm(s, 0.4)
+
+
+def sonar(pan):
+    """Stereo sonar ping; pan -1 (left) .. 1 (right)."""
+    t = t_arr(0.5)
+    p = (np.sin(2 * np.pi * 1320 * t) + 0.3 * np.sin(2 * np.pi * 2640 * t)) * np.exp(-t * 9)
+    left, right = np.sqrt(0.5 * (1 - pan)), np.sqrt(0.5 * (1 + pan))
+    return np.stack([p * left, p * right], 1) * 0.8
+
+
+def freeze():
+    t = t_arr(0.9)
+    crack = hp(noise(len(t)) * (np.random.random(len(t)) > 0.97), 3000) * np.exp(-t * 3)
+    tone = sine(1800 * np.exp(-t * 2), t) * np.exp(-t * 4) * 0.4
+    return _norm(reverb(crack * 2 + tone, 0.4), 0.7)
+
+
+def splat():
+    """Wet burst of a Boltzmann brain."""
+    t = t_arr(0.6)
+    squelch = lp(noise(len(t)), 900) * np.exp(-t * 9)
+    pop = np.sin(2 * np.pi * (180 * np.exp(-t * 25) + 60) * t) * np.exp(-t * 14)
+    drops = bp(noise(len(t)) * (np.random.random(len(t)) > 0.985), 800, 3000) * np.exp(-t * 4) * 3
+    return _norm(np.tanh((squelch + pop + drops * 0.4) * 2.0), 0.85)
+
+
+def brain_spawn():
+    t = t_arr(0.5)
+    f = 2400 + 1200 * np.sin(2 * np.pi * 9 * t)
+    return _norm(sine(f, t) * np.minimum(1, t / 0.15) * np.exp(-t * 6) * 0.6, 0.35)
+
+
+def enemy_shot():
+    """Catlien disruptor: low, nasty zap."""
+    t = t_arr(0.3)
+    f = 900 * np.exp(-t * 9) + 120
+    s = saw(f, t) + square(f * 0.5, t) * 0.5
+    return _norm(lp(s, 3500) * np.exp(-t * 9), 0.6)
+
+
+def metal_hit():
+    t = t_arr(0.4)
+    s = sum(np.sin(2 * np.pi * f * t) * np.exp(-t * d) for f, d in ((420, 9), (1130, 12), (2650, 16)))
+    s += hp(noise(len(t)), 2000) * np.exp(-t * 40)
+    return _norm(s, 0.6)
+
+
+def blackhole_loop():
+    """3 s seamless loop: deep rumble with a slow swirl."""
+    t = t_arr(3.0)
+    s = sine(31, t) + 0.6 * sine(46.6667, t) + lp(noise(len(t)), 120) * 2.5
+    s *= 0.75 + 0.25 * sine(1 / 3, t)
+    return _norm(s, 0.7)
+
+
+def absorbed():
+    t = t_arr(2.5)
+    f = 400 * np.exp(-t * 1.8) + 20
+    s = saw(f, t) + sine(f * 0.5, t) + lp(noise(len(t)), 200) * np.exp(-t * 1.0) * 2
+    return _norm(reverb(lp(s, 1200) * np.exp(-t * 0.9), 0.4), 0.85)
+
+
 SFX = {
     "laser": laser, "beam_loop": beam_loop, "shield_loop": shield_loop, "shield_on": shield_on,
     "shield_off": shield_off, "boom_small": lambda: explosion(0.8), "boom_big": lambda: explosion(1.5),
     "thud": thud, "nuke_launch": nuke_launch, "nuke_boom": nuke_boom, "crack": crack, "switch": switch,
     "empty": empty, "beep": beep, "beep_high": lambda: beep(1320, 0.22), "chime": chime, "game_over": game_over,
-    "alarm": alarm,
+    "alarm": alarm, "siren": siren, "hypno_loop": hypno_loop, "freeze": freeze, "splat": splat,
+    "brain_spawn": brain_spawn, "enemy_shot": enemy_shot, "metal_hit": metal_hit, "blackhole_loop": blackhole_loop,
+    "absorbed": absorbed,
+    "sonar_l2": lambda: sonar(-0.9), "sonar_l1": lambda: sonar(-0.45), "sonar_c": lambda: sonar(0.0),
+    "sonar_r1": lambda: sonar(0.45), "sonar_r2": lambda: sonar(0.9),
 }
 
 

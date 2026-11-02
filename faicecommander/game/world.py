@@ -1,14 +1,18 @@
-"""The play plane: ship, weapons, asteroids, collisions and effects (logic in 2D, visuals in 3D)."""
+"""The play plane: ship, weapons, targets, enemy fire, black holes and effects (logic in 2D, visuals in 3D)."""
 import math
 
 import numpy as np
 
 from ..config import Units
-from ..render.effects import Beam, EffectTemplates, Explosion, Puff
+from ..render.effects import Beam, BrainBurst, EffectTemplates, Explosion, Puff
 from .entities.asteroid import Asteroid, AsteroidLibrary
+from .entities.black_hole import BlackHole, BlackHoleTemplate
+from .entities.brain import Brain, BrainLibrary
 from .entities.projectiles import BoltTemplate, LaserBolt, Nuke, NukeTemplate
+from .entities.raider import EnemyShot, Raider, RaiderTemplate
 from .entities.ship import Ship
 from .weapons import Weapons
+
 
 class World:
     def __init__(self, base, cfg):
@@ -21,32 +25,44 @@ class World:
         self.shield_factor = cfg["ship.shield_damage_factor"]
         self.hull_regen = cfg["ship.hull_regen_per_s"]
         self.ring_speed = self.u(cfg["effects.shockwave_speed_px"])
+        self.splatter_distance = self.u(cfg["effects.splatter_distance_px"])
         self.nuke_speed = self.u(cfg["weapons.nuke.speed_px"])
         self.nuke_accel = self.u(cfg["weapons.nuke.accel_px"])
         self.nuke_radius = self.u(cfg["weapons.nuke.blast_radius_px"])
         self.nuke_fuse = cfg["weapons.nuke.fuse_s"]
         self.beam_half_width = self.u(cfg["weapons.beam.half_width_px"])
-        self.targets = {1: cfg["targets.asteroid_1"].dict(), 2: cfg["targets.asteroid_2"].dict()}
+        self.resist = {k: cfg[f"targets.{name}"].dict() for k, name in
+                       ((1, "asteroid_1"), (2, "asteroid_2"), ("brain", "brain"), ("raider", "raider"))}
         self.ship = Ship(self.root, cfg, self.u)
         self.weapons = Weapons(cfg, self.u)
         self.rocks = AsteroidLibrary()
+        self.brain_lib = BrainLibrary()
+        self.raider_tpl = RaiderTemplate()
+        self.hole_tpl = BlackHoleTemplate()
         self.bolt_tpl = BoltTemplate()
         self.nuke_tpl = NukeTemplate()
         self.fx_tpl = EffectTemplates()
         self.beam = Beam(self.root, self.fx_tpl)
         self.top_y, self.bottom_y = 22.0, -14.0
-        self.asteroids, self.bolts, self.nukes, self.effects = [], [], [], []
+        self.asteroids, self.brains, self.raiders = [], [], []
+        self.bolts, self.nukes, self.shots, self.holes, self.effects = [], [], [], [], []
         self.events = []
         self.score = 0.0
-        self.split = None  # set by levels with category 2 asteroids
+        self.split = None        # set by levels with category 2 asteroids
+        self.death_cause = None  # "hull" or "absorbed"
+        self.hole_proximity = 0.0
         self._puff_t = 0.0
+
+    @property
+    def targets(self):
+        return [t for group in (self.asteroids, self.brains, self.raiders) for t in group if t.alive]
 
     def set_bounds(self, top_y, bottom_y):
         """Visible extent of the play plane along y (from the camera)."""
         self.top_y, self.bottom_y = top_y, bottom_y
 
     def reset(self, unlocked=("laser", "shield"), nukes=0):
-        for group in (self.asteroids, self.bolts, self.nukes):
+        for group in (self.asteroids, self.brains, self.raiders, self.bolts, self.nukes, self.shots, self.holes):
             for e in group:
                 e.remove()
             group.clear()
@@ -55,9 +71,12 @@ class World:
         self.effects.clear()
         self.beam.hide()
         self.ship.reset()
+        self.ship.node.show()
         self.weapons.reset(unlocked, nukes)
         self.events.clear()
         self.split = None
+        self.death_cause = None
+        self.hole_proximity = 0.0
 
     def emit(self, event):
         self.events.append(event)
@@ -77,10 +96,26 @@ class World:
             speed = self.u(self.rng.uniform(*speed_px))
             ang = math.radians(self.rng.uniform(-spread_deg, spread_deg))
             vel = (speed * math.sin(ang), -speed * math.cos(ang))
-        a = Asteroid(self.root, self.rocks, self.rng, x, y, r, vel[0], vel[1], category, self.targets[category],
+        a = Asteroid(self.root, self.rocks, self.rng, x, y, r, vel[0], vel[1], category, self.resist[category],
                      damage, score)
         self.asteroids.append(a)
         return a
+
+    def spawn_brain(self, x, y, radius, life, damage, score):
+        b = Brain(self.root, self.brain_lib, self.rng, x, y, radius, life, self.resist["brain"], damage, score)
+        self.brains.append(b)
+        return b
+
+    def spawn_raider(self, x, y, speed, fire_interval, shot_speed, shot_damage, score):
+        r = Raider(self.root, self.raider_tpl, self.rng, x, y, speed, fire_interval, shot_speed, shot_damage,
+                   self.resist["raider"], score)
+        self.raiders.append(r)
+        return r
+
+    def spawn_hole(self, x, y, vy, horizon, pull):
+        h = BlackHole(self.root, self.hole_tpl, x, y, vy, horizon, pull)
+        self.holes.append(h)
+        return h
 
     def count(self, category):
         return sum(1 for a in self.asteroids if a.alive and a.category == category)
@@ -91,17 +126,25 @@ class World:
     def fire_nuke(self, x, y):
         self.nukes.append(Nuke(self.root, self.nuke_tpl, x, y, self.nuke_speed, self.nuke_accel, self.nuke_fuse))
 
+    def fire_enemy(self, x, y, vx, vy, damage):
+        self.shots.append(EnemyShot(self.root, self.raider_tpl, x, y, vx, vy, damage))
+        self.emit(("enemy_shot",))
+
     def explode(self, x, y, size):
         d = math.hypot(x - self.ship.x, y - self.ship.y)
         fx = Explosion(self.root, self.fx_tpl, (x, y, 0), size, self.rng, self.ring_speed, d)
         self.effects.append(fx)
         return fx
 
+    def raider_bounds(self):
+        return (-self.half_width * 0.9, self.half_width * 0.9, self.ship.y + 6.0, min(self.top_y - 8, self.ship.y + 13))
+
     # ------------------------------------------------------------ simulation
 
     def update(self, dt, ctl):
         ship = self.ship
-        ship.update(dt, ctl.steer, self.half_width)
+        drift = sum(h.drift(ship.x, ship.y, ship.max_speed * 2) for h in self.holes if h.alive)
+        ship.update(dt, ctl.steer, self.half_width, drift)
         self.weapons.update(dt, ctl, ship, self)
         ship.hull = min(100.0, ship.hull + self.hull_regen * dt)
         for b in self.bolts:
@@ -112,15 +155,28 @@ class World:
             n.update(dt)
         margin = self.half_width + 6
         for a in self.asteroids:
+            for h in self.holes:
+                a.vx += h.drift(a.x, a.y, 20.0) * dt * 1.5
             a.update(dt, self.scroll)
             if a.y < self.bottom_y - 3 or abs(a.x) > margin:
                 a.remove()
+        for b in self.brains:
+            b.update(dt, self.scroll)
+            if b.expired or b.y < self.bottom_y - 2:
+                b.remove()
+        bounds = self.raider_bounds()
+        for r in self.raiders:
+            r.update(dt, ship, bounds, self.raiders, self.fire_enemy)
+        for s in self.shots:
+            s.update(dt)
+            if s.y < self.bottom_y - 2 or s.y > self.top_y + 3 or abs(s.x) > margin:
+                s.remove()
+        self._update_holes(dt)
         self._update_beam(dt)
         self._update_nukes(dt)
         self._collide()
-        self.asteroids = [a for a in self.asteroids if a.alive]
-        self.bolts = [b for b in self.bolts if b.alive]
-        self.nukes = [n for n in self.nukes if n.alive]
+        for name in ("asteroids", "brains", "raiders", "bolts", "nukes", "shots", "holes"):
+            setattr(self, name, [e for e in getattr(self, name) if e.alive])
         alive = []
         for fx in self.effects:
             if isinstance(fx, Explosion) and fx.boom_due(ship.x, ship.y):
@@ -129,20 +185,46 @@ class World:
                 alive.append(fx)
         self.effects = alive
 
-    def _kill(self, a, cause):
-        a.remove()
-        self.explode(a.x, a.y, 0.6 + a.radius * (1.0 if a.category == 1 else 1.3))
-        self.emit(("kill", a, cause))
-        if a.category == 2 and cause != "nuke" and self.split:
+    def _update_holes(self, dt):
+        ship = self.ship
+        self.hole_proximity = 0.0
+        for h in self.holes:
+            h.update(dt, self.scroll)
+            if h.y < self.bottom_y - 6:
+                h.remove()
+                continue
+            d = h.distance(ship.x, ship.y)
+            self.hole_proximity = max(self.hole_proximity, min(1.0, max(0.0, 1 - (d - h.horizon) / 10)))
+            if d < h.horizon + ship.radius * 0.5 and self.death_cause is None:
+                self.death_cause = "absorbed"
+                ship.hull = 0.0
+                self.emit(("absorbed",))
+            for a in self.asteroids:
+                if a.alive and h.distance(a.x, a.y) < h.horizon:
+                    a.remove()  # swallowed without a trace
+
+    def _kill(self, t, cause):
+        t.remove()
+        self.emit(("kill", t, cause))
+        if t.kind == "brain":
+            self.effects.append(BrainBurst(self.root, self.fx_tpl, (t.x, t.y, 0.3), 1.0 + t.radius, self.rng))
+            if math.hypot(t.x - self.ship.x, t.y - self.ship.y) < self.splatter_distance:
+                self.emit(("splatter", (t.x, t.y, 0.3)))
+            return
+        if t.kind == "raider":
+            self.explode(t.x, t.y, 2.2)
+            return
+        self.explode(t.x, t.y, 0.6 + t.radius * (1.0 if t.category == 1 else 1.3))
+        if t.category == 2 and cause != "nuke" and self.split:
             s = self.split
-            self.emit(("split", a))
+            self.emit(("split", t))
             for _ in range(int(self.rng.integers(1, s["max"] + 1))):
                 ang = self.rng.uniform(0, 2 * math.pi)
                 speed = self.u(self.rng.uniform(*s["speed_px"]))
-                vel = (a.vx + speed * math.cos(ang), a.vy + speed * math.sin(ang))
-                off = a.radius * 0.5
+                vel = (t.vx + speed * math.cos(ang), t.vy + speed * math.sin(ang))
+                off = t.radius * 0.5
                 self.spawn_asteroid(1, s["size_px"], None, 0, s["damage"], s["score"],
-                                    x=a.x + off * math.cos(ang), y=a.y + off * math.sin(ang), vel=vel)
+                                    x=t.x + off * math.cos(ang), y=t.y + off * math.sin(ang), vel=vel)
 
     def _update_beam(self, dt):
         if not self.weapons.beam_on:
@@ -150,10 +232,9 @@ class World:
             return
         ship = self.ship
         y0 = ship.prow_y
-        hits = [a for a in self.asteroids if a.alive and a.y > y0 - a.radius
-                and abs(a.x - ship.x) < a.radius + self.beam_half_width]
-        target = min(hits, key=lambda a: a.y - a.radius) if hits else None
-        y1 = max(y0, target.y - a_radius_on_axis(target, ship.x)) if target else self.top_y + 4
+        hits = [t for t in self.targets if t.y > y0 - t.radius and abs(t.x - ship.x) < t.radius + self.beam_half_width]
+        target = min(hits, key=lambda t: t.y - t.radius) if hits else None
+        y1 = max(y0, target.y - radius_on_axis(target, ship.x)) if target else self.top_y + 4
         self.beam.show(ship.x, y0, y1, target is not None, dt)
         if target is not None:
             target.beam_heat = 1.0
@@ -165,8 +246,7 @@ class World:
         for n in self.nukes:
             if self._puff_t > 0.025:
                 self.effects.append(Puff(self.root, (n.x, n.y - 0.6, 0.1), self.rng))
-            hit = any(a.alive and (a.x - n.x) ** 2 + (a.y - n.y) ** 2 < (a.radius + n.radius) ** 2
-                      for a in self.asteroids)
+            hit = any((t.x - n.x) ** 2 + (t.y - n.y) ** 2 < (t.radius + n.radius) ** 2 for t in self.targets)
             if hit or n.expired or n.y > self.top_y - 1:
                 self._detonate(n)
         if self._puff_t > 0.025:
@@ -176,32 +256,47 @@ class World:
         n.remove()
         self.explode(n.x, n.y, 3.0)
         self.emit(("nuke_boom",))
-        for a in self.asteroids:
-            if a.alive and math.hypot(a.x - n.x, a.y - n.y) < self.nuke_radius + a.radius:
-                if a.hurt("nuke"):
-                    self._kill(a, "nuke")
+        for t in self.targets:
+            if math.hypot(t.x - n.x, t.y - n.y) < self.nuke_radius + t.radius and t.hurt("nuke"):
+                self._kill(t, "nuke")
+        for s in self.shots:
+            if math.hypot(s.x - n.x, s.y - n.y) < self.nuke_radius:
+                s.remove()
 
     def _collide(self):
         ship = self.ship
-        for a in self.asteroids:
-            if not a.alive:
-                continue
+        for t in self.targets:
             for b in self.bolts:
-                if b.alive and (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < (a.radius + b.radius) ** 2:
+                if b.alive and (t.x - b.x) ** 2 + (t.y - b.y) ** 2 < (t.radius + b.radius) ** 2:
                     b.remove()
-                    a.beam_heat = 0.6
-                    if a.hurt("laser"):
-                        self._kill(a, "laser")
+                    t.beam_heat = 0.6
+                    if t.kind == "raider":
+                        self.emit(("metal_hit",))
+                    if t.hurt("laser"):
+                        self._kill(t, "laser")
                         break
-            if a.alive and (a.x - ship.x) ** 2 + (a.y - ship.y) ** 2 < (a.radius + ship.radius) ** 2:
-                dmg = a.damage * (self.shield_factor if ship.shield_on else 1.0)
-                ship.hull = max(0.0, ship.hull - dmg)
-                a.remove()
-                self.explode(a.x, a.y, 0.4 + a.radius * 0.7)
-                self.emit(("hit", dmg))
+            if t.alive and t.kind != "raider" and (t.x - ship.x) ** 2 + (t.y - ship.y) ** 2 < (t.radius + ship.radius) ** 2:
+                self._hit_ship(t.damage)
+                t.remove()
+                if t.kind == "brain":
+                    self.effects.append(BrainBurst(self.root, self.fx_tpl, (t.x, t.y, 0.3), 1.0, self.rng))
+                    self.emit(("splatter", (t.x, t.y, 0.3)))
+                else:
+                    self.explode(t.x, t.y, 0.4 + t.radius * 0.7)
+        for s in self.shots:
+            if (s.x - ship.x) ** 2 + (s.y - ship.y) ** 2 < (s.radius + ship.radius) ** 2:
+                s.remove()
+                self._hit_ship(s.damage)
+
+    def _hit_ship(self, damage):
+        dmg = damage * (self.shield_factor if self.ship.shield_on else 1.0)
+        self.ship.hull = max(0.0, self.ship.hull - dmg)
+        if self.ship.hull <= 0 and self.death_cause is None:
+            self.death_cause = "hull"
+        self.emit(("hit", dmg))
 
 
-def a_radius_on_axis(a, x):
-    """Half chord of the asteroid's circle at the beam's x: the beam stops at the rock's surface."""
-    dx = min(abs(a.x - x), a.radius)
-    return math.sqrt(max(a.radius ** 2 - dx ** 2, 0.0))
+def radius_on_axis(t, x):
+    """Half chord of the target's circle at the beam's x: the beam stops at its surface."""
+    dx = min(abs(t.x - x), t.radius)
+    return math.sqrt(max(t.radius ** 2 - dx ** 2, 0.0))

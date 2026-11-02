@@ -69,8 +69,20 @@ laser = 2
 beam = 1.0
 nuke = 1
 
+[targets.brain]
+laser = 1
+beam = 0.25
+nuke = 1
+
+[targets.raider]
+laser = 6
+beam = 2.0                  # spec: 4 s; halved like the asteroid beam times
+nuke = 2
+
 [effects]
 shockwave_speed_px = 260    # the explosion is heard when this ring reaches the ship
+splatter_distance_px = 140  # brains bursting closer than this smear the screen
+splatter_s = 3.0
 
 [audio]
 master = 0.9
