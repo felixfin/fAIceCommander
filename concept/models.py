@@ -291,63 +291,6 @@ def build_brain(parent, scale=1.0, aura=True):
     return root
 
 
-def build_ship(parent):
-    """FaceCommander: patchwork warship built from salvaged hulls, brain under a glass dome."""
-    root = parent.attachNewNode("ship")
-    hull_prof = [(0.0, 2.5), (0.22, 1.95), (0.46, 1.1), (0.58, 0.1), (0.54, -0.9), (0.42, -1.5), (0.3, -1.65)]
-    V, F = lathe(hull_prof, 6, "y", phase=math.pi / 6)
-    part(root, V, F, GUNMETAL, scale=(1, 1, 0.72), orient="y")
-    # salvaged plates in mismatching colours
-    rng = np.random.default_rng(7)
-    for (px, py, sx, sy, col) in [(0.0, 0.2, 0.5, 0.7, RUST), (0.18, -0.7, 0.35, 0.5, OLIVE),
-                                  (-0.2, -0.45, 0.3, 0.6, (0.33, 0.38, 0.52)), (0.0, 1.55, 0.25, 0.4, RUST)]:
-        Vb, Fb = box(sx, sy, 0.06)
-        part(root, Vb, Fb, col, pos=(px, py, 0.36), hpr=(rng.uniform(-6, 6), 0, 0))
-    # wings: right one rusty orange (homage to the 2D original), left one faded olive
-    wing = [(0.45, 0.7), (2.05, -0.85), (2.15, -1.35), (0.45, -1.2)]
-    for sgn, col in ((1, RUST), (-1, OLIVE)):
-        pts = [(sgn * x, y) for x, y in wing]
-        if sgn < 0:
-            pts = pts[::-1]
-        Vw, Fw = prism(pts, 0.09)
-        part(root, Vw, Fw, col, hpr=(0, 0, -sgn * 7))
-        for k in range(3):  # hazard stripes
-            Vs, Fs = box(0.12, 0.42, 0.02)
-            part(root, Vs, Fs, (0.95, 0.75, 0.1) if k % 2 == 0 else (0.08, 0.08, 0.08),
-                 pos=(sgn * (1.2 + k * 0.14), -0.75 - k * 0.1, 0.08), hpr=(sgn * 30, 0, -sgn * 7))
-        # wingtip laser cannon
-        Vc, Fc = lathe([(0.07, 0.6), (0.09, 0.0), (0.09, -0.5)], 6, "y")
-        part(root, Vc, Fc, DARK, pos=(sgn * 2.1, -0.75, 0.0), orient="y")
-        Vt, Ft = icosphere(1)
-        part(root, Vt * 0.07, Ft, GREEN_LASER, pos=(sgn * 2.1, -0.12, 0.0), unlit=True)
-        glow(root, (sgn * 2.1, -0.1, 0.0), 0.35, (*GREEN_LASER, 0.9))
-        # engine nacelle
-        Vn, Fn = lathe([(0.17, 0.25), (0.28, -0.15), (0.3, -1.2), (0.25, -1.75)], 8, "y")
-        part(root, Vn, Fn, (0.3, 0.32, 0.36), pos=(sgn * 0.68, -0.25, -0.08), orient="y")
-        Vd, Fd = lathe([(0.21, 0), (0.0, -0.01)], 8, "y")
-        part(root, Vd, Fd, CYAN, pos=(sgn * 0.68, -2.01, -0.08), unlit=True, orient=None, two_sided=True)
-        for ln, a in ((1.1, 0.45), (0.65, 0.7)):
-            Vf, Ff = lathe([(0.2, 0), (0.0, -ln)], 10, "y")
-            part(root, Vf, Ff, (0.35, 0.8, 1.0, a), pos=(sgn * 0.68, -2.02, -0.08), additive=True, orient=None,
-                 vcol=lambda p, a=a, ln=ln: (0.4 + 0.6 * (1 + p[1] / ln), 0.85, 1.0, a * (1 + p[1] / ln)))
-        glow(root, (sgn * 0.68, -2.1, -0.08), 0.7, (0.4, 0.8, 1.0, 0.9))
-        # nuclear rocket under the wing
-        Vr, Fr = lathe([(0.0, 0.45), (0.07, 0.3), (0.07, -0.35), (0.05, -0.4)], 6, "y")
-        part(root, Vr, Fr, (0.85, 0.85, 0.8), pos=(sgn * 1.15, -0.55, -0.16), orient="y")
-        part(root, Vt * 0.06, Ft, (1.0, 0.15, 0.1), pos=(sgn * 1.15, -0.1, -0.16), unlit=True)
-    # dorsal fin
-    Vf, Ff = prism([(-0.75, 0.25), (-1.55, 0.25), (-1.7, 0.95), (-1.35, 0.95)], 0.06)
-    part(root, Vf[:, [2, 0, 1]], Ff, (0.5, 0.52, 0.55), pos=(0, 0, 0.05))
-    # cockpit: glass dome with the commander's living brain
-    build_brain(root, 0.26, aura=False).setPos(0, 0.95, 0.38)
-    glow(root, (0, 0.95, 0.42), 0.7, (1.0, 0.4, 0.7, 0.5))
-    Vh, Fh = hemisphere(2)
-    part(root, Vh * 0.42, Fh, (0.55, 0.95, 1.0, 0.28), pos=(0, 0.95, 0.27), alpha=True, two_sided=True)
-    Vr, Fr = lathe([(0.44, 0.0), (0.44, 0.06)], 12, "z")
-    part(root, Vr, Fr, DARK, pos=(0, 0.95, 0.25), orient="z")
-    return root
-
-
 def asteroid_mesh(seed, radius, irregular=0.35, sub=2, base=(0.47, 0.43, 0.39)):
     rng = np.random.default_rng(seed)
     V, F = icosphere(sub)
@@ -385,47 +328,124 @@ def build_asteroid(parent, seed, radius, category=1):
     return root
 
 
-CAT_PURPLE = (0.28, 0.16, 0.38)
-MAGENTA = (1.0, 0.2, 0.85)
-ACID = (0.65, 1.0, 0.15)
+def build_ship(parent):
+    """FaceCommander: a boxy salvaged gunship, silhouette borrowed from the 2D original sprite."""
+    root = parent.attachNewNode("ship")
+    ORANGE = (0.86, 0.42, 0.12)
+    # main hull: beveled brick, tapering to a stepped prow
+    outline = [(0.55, -1.35), (0.62, -1.15), (0.62, 0.75), (0.42, 1.25), (-0.42, 1.25), (-0.62, 0.75),
+               (-0.62, -1.15), (-0.55, -1.35)]
+    V, F = loft(outline, [(0.88, -0.32), (1.0, -0.12), (1.0, 0.18), (0.86, 0.34)])
+    part(root, V, F, ORANGE)
+    # stepped prow like the sprite's pointed top
+    Vb, Fb = box(0.6, 0.55, 0.42)
+    part(root, Vb, Fb, (0.78, 0.36, 0.1), pos=(0, 1.45, 0.02))
+    Vb, Fb = box(0.36, 0.4, 0.3)
+    part(root, Vb, Fb, (0.7, 0.32, 0.09), pos=(0, 1.85, 0.0))
+    Vw, Fw = loft([(0.16, 0), (0.0, 0.35), (-0.16, 0)], [(1, -0.12), (1, 0.12)])
+    part(root, Vw, Fw, (0.32, 0.33, 0.36), pos=(0, 2.05, 0))
+    # side pods with the sprite's swept fins
+    for sgn, col in ((1, (0.3, 0.31, 0.34)), (-1, (0.36, 0.37, 0.33))):
+        Vb, Fb = box(0.42, 1.7, 0.5)
+        part(root, Vb, Fb, col, pos=(sgn * 0.88, -0.35, -0.08))
+        Vb, Fb = box(0.3, 0.5, 0.34)
+        part(root, Vb, Fb, (0.24, 0.25, 0.28), pos=(sgn * 0.88, 0.7, -0.1))
+        fin = [(sgn * 1.05, -0.2), (sgn * 1.75, -0.95), (sgn * 1.75, -1.4), (sgn * 1.05, -1.15)]
+        Vf, Ff = prism(fin if sgn > 0 else fin[::-1], 0.1)
+        part(root, Vf, Ff, ORANGE, pos=(0, 0, -0.1), hpr=(0, 0, -sgn * 12))
+        for k in range(3):  # hazard stripes on the fins
+            Vs, Fs = box(0.1, 0.36, 0.02)
+            part(root, Vs, Fs, (0.95, 0.78, 0.1) if k % 2 == 0 else (0.07, 0.07, 0.07),
+                 pos=(sgn * (1.3 + k * 0.12), -0.95, -0.03 - k * 0.025), hpr=(sgn * 45, 0, -sgn * 12))
+        # laser cannon in the pod nose, green muzzle like the 2D original
+        Vc, Fc = lathe([(0.06, 0.5), (0.08, 0.0)], 6, "y")
+        part(root, Vc, Fc, DARK, pos=(sgn * 0.88, 0.95, -0.1), orient="y")
+        Vt, Ft = icosphere(1)
+        part(root, Vt * 0.07, Ft, GREEN_LASER, pos=(sgn * 0.88, 1.47, -0.1), unlit=True)
+        glow(root, (sgn * 0.88, 1.5, -0.1), 0.35, (*GREEN_LASER, 0.9))
+        # nuke rack on the pod
+        for j in range(3):
+            Vr, Fr = lathe([(0.0, 0.32), (0.05, 0.22), (0.05, -0.22)], 6, "y")
+            part(root, Vr, Fr, (0.55, 0.56, 0.52), pos=(sgn * (0.8 + j * 0.08), -0.55, 0.2), orient="y")
+            part(root, Vt * 0.04, Ft, (1, 0.15, 0.1), pos=(sgn * (0.8 + j * 0.08), -0.23, 0.2), unlit=True)
+    # salvaged plates, rivets, antenna
+    rng = np.random.default_rng(7)
+    for (px, py, sx, sy, col) in [(0.18, 0.35, 0.4, 0.5, (0.42, 0.44, 0.47)), (-0.22, -0.55, 0.38, 0.6, OLIVE),
+                                  (0.2, -0.95, 0.3, 0.35, (0.55, 0.22, 0.1))]:
+        Vb, Fb = box(sx, sy, 0.05)
+        part(root, Vb, Fb, col, pos=(px, py, 0.36), hpr=(rng.uniform(-5, 5), 0, 0))
+    Vb, Fb = box(0.03, 0.03, 0.6)
+    part(root, Vb, Fb, DARK, pos=(-0.35, -1.0, 0.62))
+    part(root, icosphere(0)[0] * 0.05, icosphere(0)[1], (1, 0.2, 0.1), pos=(-0.35, -1.0, 0.93), unlit=True)
+    # three square exhausts with yellow-white flames (2D original had yellow flames)
+    for x in (-0.3, 0.0, 0.3):
+        Vb, Fb = box(0.24, 0.12, 0.24)
+        part(root, Vb, Fb, (0.15, 0.15, 0.17), pos=(x, -1.4, -0.02))
+        Vd, Fd = box(0.18, 0.01, 0.18)
+        part(root, Vd, Fd, (1.0, 0.9, 0.5), pos=(x, -1.47, -0.02), unlit=True)
+        for ln, a in ((0.9, 0.45), (0.5, 0.75)):
+            Vf, Ff = lathe([(0.11, 0), (0.0, -ln)], 4, "y", phase=math.pi / 4)
+            part(root, Vf, Ff, (1, 1, 1), pos=(x, -1.48, -0.02), additive=True, orient=None,
+                 vcol=lambda p, a=a, ln=ln: (1.0, 0.85 - 0.3 * (-p[1] / ln), 0.4 - 0.3 * (-p[1] / ln), a * (1 + p[1] / ln)))
+        glow(root, (x, -1.6, -0.02), 0.45, (1.0, 0.8, 0.35, 0.9))
+    # cockpit: the commander's brain under a glass dome (dark oval of the 2D sprite)
+    build_brain(root, 0.24, aura=False).setPos(0, 0.25, 0.44)
+    glow(root, (0, 0.25, 0.48), 0.65, (1.0, 0.4, 0.7, 0.45))
+    Vh, Fh = hemisphere(2)
+    part(root, Vh * np.array([0.38, 0.45, 0.34]), Fh, (0.55, 0.95, 1.0, 0.28), pos=(0, 0.25, 0.34),
+         alpha=True, two_sided=True)
+    Vr, Fr = lathe([(0.42, 0.0), (0.42, 0.07)], 12, "z")
+    ring = part(root, Vr, Fr, DARK, pos=(0, 0.25, 0.32), orient="z")
+    ring.setScale(0.92, 1.1, 1)
+    return root
 
 
-def _cat_eye(root, pos, size, slit_color=(0.02, 0.02, 0.02)):
-    eye = [(0, 0.5), (0.55, 0.12), (0.55, -0.12), (0, -0.5), (-0.55, -0.12), (-0.55, 0.12)]
-    Ve, Fe = prism([(x * size, y * size * 0.55) for x, y in eye], 0.04)
-    part(root, Ve, Fe, ACID, pos=pos, unlit=True)
-    Vp, Fp = box(0.07 * size, 0.5 * size, 0.05)
-    part(root, Vp, Fp, slit_color, pos=(pos[0], pos[1], pos[2] + 0.02), unlit=True)
-    glow(root, pos, size * 1.3, (*ACID, 0.6))
+# Catliens: near-black biomech hulls, dried-blood plates, bone ribs, ember-red slit sensors
+HULL_BLACK = (0.085, 0.07, 0.08)
+BLOOD = (0.2, 0.035, 0.045)
+BONE = (0.4, 0.36, 0.3)
+EMBER = (1.0, 0.32, 0.06)
+
+
+def _slit(root, pos, length, width=0.05, color=EMBER, yaw=0.0, glow_size=None):
+    Vs, Fs = box(width, length, 0.04)
+    part(root, Vs, Fs, color, pos=pos, hpr=(yaw, 0, 0), unlit=True)
+    glow(root, pos, glow_size or length * 1.4, (*color, 0.75))
 
 
 def build_fighter(parent):
-    """Catlien space fighter. Faces -Y (towards the player); read from above it is a cat's face."""
+    """Catlien raider: an abstract arrowhead warship; only the swept 'ears' and slit eyes hint at a cat."""
     root = parent.attachNewNode("fighter")
-    head = [(0, -1.15), (0.75, -0.85), (1.05, -0.1), (0.85, 0.65), (0.35, 0.95),
-            (-0.35, 0.95), (-0.85, 0.65), (-1.05, -0.1), (-0.75, -0.85)]
-    V, F = loft(head, [(0.85, -0.3), (1.0, 0.0), (0.92, 0.18), (0.6, 0.42)])
-    body = part(root, V, F, CAT_PURPLE)
-    neon_edges(body, (0.9, 0.2, 0.8, 0.35), 1.0)
-    for sgn in (1, -1):  # ears at the back edge
-        Vp, Fp = pyramid([(sgn * 0.25, 0.55), (sgn * 0.95, 0.35), (sgn * 0.75, 1.0)], (sgn * 0.75, 0.95, 1.05))
-        ear = part(root, Vp, Fp, CAT_PURPLE)
-        neon_edges(ear, (1.0, 0.25, 0.85, 0.9))
-        Vi, Fi = pyramid([(sgn * 0.42, 0.62), (sgn * 0.8, 0.5), (sgn * 0.7, 0.85)], (sgn * 0.72, 0.88, 0.85))
-        part(root, Vi * np.array([1, 1, 1]), Fi, MAGENTA, pos=(0, 0, 0.06), unlit=True)
-        _cat_eye(root, (sgn * 0.38, -0.12, 0.43), 0.42)
-        for k, ang in enumerate((-12, 0, 12)):  # whisker antennas
-            Vw, Fw = box(1.3, 0.025, 0.025)
-            part(root, Vw, Fw, MAGENTA, pos=(sgn * 1.1, -0.72 + k * 0.08, 0.05), hpr=(sgn * ang, 0, 0), unlit=True)
-        Vb, Fb = prism([(sgn * 0.9, 0.2), (sgn * 1.75, 0.95), (sgn * 1.55, 1.15), (sgn * 0.8, 0.6)][::sgn], 0.07)
-        blade = part(root, Vb, Fb, (0.2, 0.12, 0.28))
-        neon_edges(blade, (1.0, 0.2, 0.85, 0.8))
-        glow(root, (sgn * 0.45, 1.0, 0.0), 0.5, (1.0, 0.3, 0.9, 0.9))
-    Vn, Fn = pyramid([(-0.12, -0.75), (0.12, -0.75), (0, -0.58)], (0, -0.68, 0.32))
-    part(root, Vn, Fn, (1.0, 0.45, 0.7), unlit=True)  # nose
-    Vc, Fc = lathe([(0.08, 0), (0.1, -0.45)], 6, "y")
-    part(root, Vc, Fc, DARK, pos=(0, -1.05, -0.05), orient="y")
-    glow(root, (0, -1.5, -0.05), 0.35, (1.0, 0.2, 0.3, 0.9))
+    outline = [(0, -1.55), (0.32, -0.75), (0.52, 0.35), (0.34, 1.0), (-0.34, 1.0), (-0.52, 0.35), (-0.32, -0.75)]
+    V, F = loft(outline, [(0.75, -0.18), (1.0, 0.0), (0.7, 0.2), (0.32, 0.32)])
+    body = part(root, V, F, HULL_BLACK)
+    neon_edges(body, (0.55, 0.06, 0.05, 0.35), 1.0)
+    for sgn in (1, -1):
+        # claw-like swept wings
+        wing = [(sgn * 0.45, 0.3), (sgn * 1.5, 0.75), (sgn * 1.65, 0.4), (sgn * 0.5, -0.2)]
+        Vw, Fw = prism(wing if sgn > 0 else wing[::-1], 0.07)
+        w = part(root, Vw, Fw, (0.12, 0.03, 0.04), hpr=(0, 0, -sgn * 6))
+        neon_edges(w, (0.6, 0.08, 0.05, 0.4), 1.0)
+        hook = [(sgn * 1.5, 0.75), (sgn * 1.85, 0.55), (sgn * 1.65, 0.4)]
+        Vh, Fh = prism(hook if sgn > 0 else hook[::-1], 0.06)
+        part(root, Vh, Fh, BONE)
+        # small back-swept dorsal fins - the only "ears"
+        Vp, Fp = pyramid([(sgn * 0.12, 0.45), (sgn * 0.36, 0.55), (sgn * 0.22, 0.95)], (sgn * 0.3, 1.05, 0.62))
+        part(root, Vp, Fp, BLOOD)
+        # mandible gun prongs reaching forward
+        Vm, Fm = lathe([(0.05, 0.0), (0.035, -0.75), (0.0, -0.95)], 5, "y")
+        part(root, Vm, Fm, BONE, pos=(sgn * 0.3, -0.75, -0.06), hpr=(-sgn * 6, 0, 0), orient="y")
+        glow(root, (sgn * 0.37, -1.62, -0.06), 0.28, (*EMBER, 0.8))
+        # slanted slit sensors
+        _slit(root, (sgn * 0.17, -0.45, 0.24), 0.38, 0.06, yaw=-sgn * 28, glow_size=0.5)
+        for k in range(3):  # bone struts on the wings
+            Vq, Fq = box(1.0, 0.04, 0.04)
+            part(root, Vq, Fq, BONE, pos=(sgn * 1.0, 0.25 + k * 0.12 - 0.1, 0.1), hpr=(sgn * (24 - k * 4), 0, -sgn * 6))
+        glow(root, (sgn * 0.55, 1.0, -0.02), 0.45, (0.9, 0.15, 0.05, 0.9))
+    # bone ribs across the spine
+    for k in range(5):
+        Vr, Fr = box(0.5 - k * 0.05, 0.05, 0.05)
+        part(root, Vr, Fr, BONE, pos=(0, -0.1 + k * 0.2, 0.3 - k * 0.01))
     return root
 
 
@@ -436,47 +456,66 @@ def mothership_layout(width=14.0):
 
 
 def build_mothership(parent, width=14.0):
+    """The Mother's dreadnought: a black crescent with forward claws, bone spines and a slit-pupil eye."""
     root = parent.attachNewNode("mothership")
     s = width / 2
-    outline = [(0, -0.42), (0.35, -0.38), (0.75, -0.18), (1.0, 0.12), (0.88, 0.38),
-               (0.45, 0.5), (-0.45, 0.5), (-0.88, 0.38), (-1.0, 0.12), (-0.75, -0.18), (-0.35, -0.38)]
+    outline = [(0, -0.36), (0.38, -0.3), (0.72, -0.05), (0.78, 0.22), (0.45, 0.48), (-0.45, 0.48),
+               (-0.78, 0.22), (-0.72, -0.05), (-0.38, -0.3)]
     poly = [(x * s, y * s) for x, y in outline]
-    V, F = loft(poly, [(0.9, -1.0), (1.0, -0.2), (0.96, 0.4), (0.72, 1.1)])
-    hull = part(root, V, F, (0.17, 0.11, 0.24))
-    neon_edges(hull, (0.85, 0.15, 0.75, 0.55))
+    V, F = loft(poly, [(0.88, -1.0), (1.0, -0.2), (0.95, 0.45), (0.7, 1.05)])
+    hull = part(root, V, F, HULL_BLACK)
+    neon_edges(hull, (0.5, 0.05, 0.04, 0.3), 1.0)
     rng = np.random.default_rng(11)
     zones = mothership_layout(width)
-    # armour greebles (zone 1, outer) and glowing vents (zone 2)
-    for _ in range(70):
-        x = rng.uniform(-0.85, 0.85) * s
-        y = rng.uniform(-0.15, 0.3) * s
-        ax = abs(x)
-        if ax < zones[3]:
-            continue
-        Vb, Fb = box(rng.uniform(0.25, 0.8), rng.uniform(0.25, 0.9), rng.uniform(0.1, 0.4))
-        if ax > zones[4]:
-            part(root, Vb, Fb, (0.24, 0.17, 0.3), pos=(x, y, 1.1))
-        else:
-            part(root, Vb, Fb, (1.0, 0.45, 0.1) if rng.random() < 0.4 else (0.3, 0.2, 0.36),
-                 pos=(x, y, 1.05), unlit=False)
     for sgn in (1, -1):
-        Vp, Fp = pyramid([(sgn * 2.0, 1.2), (sgn * 5.6, 0.9), (sgn * 4.6, 3.4)], (sgn * 4.4, 3.0, 4.2))
-        ear = part(root, Vp, Fp, (0.2, 0.13, 0.28), pos=(0, 0, 1.0))
-        neon_edges(ear, (1.0, 0.2, 0.8, 0.8))
-        Vi, Fi = pyramid([(sgn * 2.8, 1.5), (sgn * 4.9, 1.3), (sgn * 4.3, 2.9)], (sgn * 4.3, 2.7, 3.2))
-        part(root, Vi, Fi, MAGENTA, pos=(0, 0, 1.15), unlit=True)
-        _cat_eye(root, (sgn * 2.3, -0.4, 1.12), 1.9)
-        for k in range(4):  # turrets along the front edge
-            Vt, Ft = lathe([(0.25, 0), (0.25, 0.3), (0.12, 0.45)], 6, "z")
-            px = sgn * (1.6 + k * 1.15)
-            part(root, Vt, Ft, (0.3, 0.22, 0.36), pos=(px, -0.55 * s * (1 - 0.12 * k) + 0.4, 0.4), orient="z")
-            glow(root, (px, -0.55 * s * (1 - 0.12 * k), 0.75), 0.35, (1.0, 0.25, 0.3, 0.8))
-        glow(root, (sgn * 3.5, 3.2, 0.0), 2.0, (1.0, 0.25, 0.85, 0.7))
-    # throne chamber of "the Mother" - zone 3, the weak spot
-    Vh, Fh = hemisphere(2)
-    part(root, Vh * np.array([0.75, 0.6, 0.55]), Fh, (1.0, 0.25, 0.55), pos=(0, -2.1, 0.95), unlit=True)
-    part(root, Vh * np.array([0.95, 0.8, 0.75]), Fh, (0.9, 0.6, 1.0, 0.25), pos=(0, -2.1, 0.92), alpha=True)
-    glow(root, (0, -2.1, 1.2), 2.4, (1.0, 0.2, 0.5, 0.8))
+        # forward claws (zone 1)
+        claw = [(sgn * 0.62 * s, -0.1 * s), (sgn * 1.0 * s, -0.3 * s), (sgn * 0.93 * s, -0.68 * s), (sgn * 0.7 * s, -0.36 * s)]
+        Vc, Fc = loft(claw if sgn > 0 else claw[::-1], [(1, -0.6), (1, 0.4)])
+        c = part(root, Vc, Fc, BLOOD)
+        neon_edges(c, (0.6, 0.08, 0.05, 0.35), 1.0)
+        tip = [(sgn * 0.93 * s, -0.68 * s), (sgn * 0.97 * s, -0.9 * s), (sgn * 0.84 * s, -0.6 * s)]
+        Vt, Ft = loft(tip if sgn > 0 else tip[::-1], [(1, -0.3), (1, 0.2)])
+        part(root, Vt, Ft, BONE)
+        # two back-swept spires: a faint memory of ears
+        Vp, Fp = pyramid([(sgn * 1.5, 1.5), (sgn * 3.0, 1.9), (sgn * 2.0, 3.1)], (sgn * 2.5, 3.9, 1.5))
+        part(root, Vp, Fp, BLOOD, pos=(0, 0, 1.0))
+        for k in range(4):  # spikes along the rear edge
+            x = sgn * (3.4 + k * 0.7)
+            Vk, Fk = pyramid([(x - 0.2, 2.0 - k * 0.35), (x + 0.2, 2.0 - k * 0.35), (x, 2.35 - k * 0.35)],
+                             (x + sgn * 0.3, 3.2 - k * 0.4, 1.0))
+            part(root, Vk, Fk, BONE, pos=(0, 0, 0.6))
+        for k in range(4):  # gun ports along the claws
+            px = sgn * (2.2 + k * 1.1)
+            Vg, Fg = box(0.35, 0.35, 0.25)
+            part(root, Vg, Fg, (0.16, 0.08, 0.09), pos=(px, -0.25 * s + k * 0.1 - 0.2, 0.3))
+            glow(root, (px, -0.25 * s + k * 0.1 - 0.45, 0.35), 0.4, (*EMBER, 0.8))
+        glow(root, (sgn * 3.2, 3.4, 0.0), 1.8, (0.8, 0.1, 0.04, 0.7))
+    # bone ribs over the hull, vents glow in zone 2, armour plates in zone 1
+    for k in range(7):
+        y = -1.2 + k * 0.65
+        Vr, Fr = box(width * (0.5 - k * 0.035), 0.12, 0.12)
+        part(root, Vr, Fr, (0.27, 0.24, 0.2), pos=(0, y, 1.08))
+    for _ in range(60):
+        x = rng.uniform(-0.75, 0.75) * s
+        y = rng.uniform(-0.15, 0.32) * s
+        ax = abs(x)
+        if ax < zones[3] + 0.3:
+            continue
+        Vb, Fb = box(rng.uniform(0.25, 0.7), rng.uniform(0.2, 0.5), rng.uniform(0.08, 0.3))
+        if ax > zones[4]:
+            part(root, Vb, Fb, (0.14, 0.1, 0.11), pos=(x, y, 1.1))
+        elif rng.random() < 0.45:
+            part(root, Vb, Fb, (0.9, 0.22, 0.05), pos=(x, y, 1.05), unlit=True)
+        else:
+            part(root, Vb, Fb, (0.2, 0.06, 0.07), pos=(x, y, 1.1))
+    # throne chamber of "the Mother" (zone 3): a dark lens with a vertical slit pupil
+    Vh, Fh = hemisphere(3)
+    part(root, Vh * np.array([0.75, 0.8, 0.42]), Fh, (0.16, 0.02, 0.02), pos=(0, -2.0, 0.95))
+    Vs, Fs = hemisphere(2)
+    part(root, Vs * np.array([0.15, 0.7, 0.46]), Fs, (1.0, 0.6, 0.12), pos=(0, -2.0, 0.97), unlit=True)
+    Vi, Fi = annulus(0.45, 0.6, seg=48, rings=2)
+    part(root, Vi, Fi, (0.9, 0.15, 0.03), pos=(0, -2.0, 1.33), unlit=True, orient=None, two_sided=True).setScale(1.2, 1.25, 1)
+    glow(root, (0, -2.0, 1.3), 2.0, (1.0, 0.2, 0.04, 0.75))
     return root
 
 
@@ -562,21 +601,16 @@ def build_hypno_rings(parent, center, radii, width=0.9):
         V, F = annulus(max(0.01, R - width), R, seg=180, rings=4)
 
         def col(p, R=R, k=k):
-            th = math.atan2(p[1] - 0, p[0])
+            th = math.atan2(p[1], p[0])
             rr = math.hypot(p[0], p[1])
             u = (rr - (R - width)) / width
-            h = (th / (2 * math.pi) * 3 + k * 0.17) % 1.0
-            r, g, b = _hsv(h, 0.75, 1.0)
+            stripe = 0.5 + 0.5 * math.sin(9 * th + 14 * u + k * 1.3)
+            r, g, b = (0.55 + 0.45 * stripe, 0.25 + 0.7 * stripe ** 3, 1.0)
             return (r, g, b, 0.85 * math.sin(math.pi * min(max(u, 0), 1)) ** 2)
 
         part(root, V, F, (1, 1, 1), orient=None, additive=True, vcol=col)
     root.setPos(*center)
     return root
-
-
-def _hsv(h, s, v):
-    import colorsys
-    return colorsys.hsv_to_rgb(h, s, v)
 
 
 def build_helmet(parent):
@@ -639,3 +673,30 @@ def _bezier(ctrl, n):
     for t in np.linspace(0, 1, n):
         out.append((1 - t) ** 3 * P[0] + 3 * (1 - t) ** 2 * t * P[1] + 3 * (1 - t) * t ** 2 * P[2] + t ** 3 * P[3])
     return out
+
+
+def build_brain_burst(parent, t, seed=3, scale=1.0):
+    """Shot Boltzmann brain: brain chunks, blood droplets and a red mist (t in [0, 1])."""
+    root = parent.attachNewNode("brainburst")
+    rng = np.random.default_rng(seed)
+    Vi, Fi = icosphere(1)
+    fade = (1 - t) ** 1.2
+    glow(root, (0, 0, 0), 1.5 + 3.5 * t, (0.6, 0.0, 0.02, 0.7 * fade))
+    for _ in range(24):
+        d = rng.normal(size=3)
+        d /= np.linalg.norm(d)
+        p = d * (0.2 + 3.2 * t * rng.uniform(0.5, 1.2))
+        Vc = Vi * rng.uniform(0.08, 0.22) * (1 + 0.35 * rng.normal(size=(len(Vi), 1)))
+        pink = (0.9, rng.uniform(0.4, 0.55), 0.55)
+        part(root, Vc, Fi, pink, pos=tuple(p), hpr=tuple(rng.uniform(0, 360, 3)))
+    for _ in range(45):
+        d = rng.normal(size=3)
+        d /= np.linalg.norm(d)
+        p = d * (0.3 + 4.2 * t * rng.uniform(0.4, 1.3))
+        stretch = 1 + 4 * t
+        drop = part(root, Vi * np.array([0.05, 0.05 * stretch, 0.05]), Fi, (0.5, 0.01, 0.03), pos=tuple(p))
+        drop.lookAt(root, tuple(p * 2))
+        glow(root, tuple(p), 0.22, (0.8, 0.02, 0.03, 0.6 * fade))
+    root.setScale(scale)
+    return root
+

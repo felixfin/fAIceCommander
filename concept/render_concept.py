@@ -175,7 +175,7 @@ def shot_ship():
         s.setHpr(25, 0, -12)
     fg, _ = render(build, (-5.5, -8.5, 5.0), (0, -0.2, 0), fov=40)
     img = finish(fg, background(2))
-    save(caption(img, "FaceCommander", "Raumschiff aus Wrackteilen · Hirn unter Glaskuppel · Laser-Kanonen · Atomraketen"),
+    save(caption(img, "FaceCommander", "boxy salvage gunship · brain under a glass dome · twin lasers · nukes"),
          "01_ship.png")
 
 
@@ -193,11 +193,11 @@ def shot_asteroids():
     fg, labels = render(build, (0, -17, 5.5), (0, 0, -0.4), fov=50)
     img = finish(fg, background(3))
     d = ImageDraw.Draw(img)
-    caption(img, "Asteroiden", "prozedural erzeugt · jede Partie anders")
+    caption(img, "Asteroids", "procedurally generated · different every run")
     xs = [labels[k][0] for k in labels]
     yb = max(v[1] for v in labels.values())
-    label(d, ((xs[0] + xs[2]) / 2, yb + 20), "KATEGORIE 1 · 10–30 px · 1 Treffer", (200, 220, 240), 24)
-    label(d, ((xs[3] + xs[4]) / 2, yb + 20), "KATEGORIE 2 · 30–50 px · zerbricht", (255, 170, 110), 24)
+    label(d, ((xs[0] + xs[2]) / 2, yb + 20), "CATEGORY 1 · 10–30 px · 1 hit", (200, 220, 240), 24)
+    label(d, ((xs[3] + xs[4]) / 2, yb + 20), "CATEGORY 2 · 30–50 px · splits apart", (255, 170, 110), 24)
     save(img, "02_asteroids.png")
 
 
@@ -207,9 +207,9 @@ def shot_fighter():
         f.setHpr(-20, 18, 8)
         lb = r.attachNewNode("bolts")
         M.build_laser_bolt(lb, (0.2, -3.2, 0.05), color=(1.0, 0.25, 0.3), length=0.7)
-    fg, _ = render(build, (2.5, -6.0, 8.0), (0, -0.2, 0), fov=42)
-    img = finish(fg, background(4, tint=(0.5, 0.1, 0.4)))
-    save(caption(img, "Catlien-Jäger", "Katzenkopf-Silhouette · Neon-Kanten · grüne Schlitzaugen · Schnurrhaar-Antennen"),
+    fg, _ = render(build, (1.5, -6.5, 7.5), (0, -0.1, 0), fov=40)
+    img = finish(fg, background(4, tint=(0.4, 0.04, 0.05), tint2=(0.08, 0.05, 0.12)))
+    save(caption(img, "Catlien Raider", "biomech arrowhead · bone mandible guns · ember slit sensors · swept fins"),
          "03_catlien_fighter.png")
 
 
@@ -218,8 +218,8 @@ def shot_mothership():
         m = M.build_mothership(r)
         m.setHpr(0, 0, 0)
     fg, _ = render(build, (0, -19, 13), (0, 0.5, 0), fov=50)
-    img = finish(fg, background(5, tint=(0.55, 0.08, 0.35)))
-    save(caption(img, "Catlien-Mutterschiff", "Endgegner · im Zentrum die Thronkammer der „Mutter“"), "04_mothership.png")
+    img = finish(fg, background(5, tint=(0.45, 0.03, 0.04), tint2=(0.06, 0.04, 0.1)))
+    save(caption(img, "Catlien Mothership", "final boss · the throne chamber of the Mother stares back"), "04_mothership.png")
 
 
 def shot_mothership_zones():
@@ -233,9 +233,9 @@ def shot_mothership_zones():
     ov = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
     zones = M.mothership_layout(width)
-    names = [("ZONE 1", "niedrig", (90, 160, 255)), ("ZONE 2", "mittel", (255, 200, 60)),
-             ("ZONE 3", "HOCH", (255, 60, 90)), ("ZONE 2", "mittel", (255, 200, 60)),
-             ("ZONE 1", "niedrig", (90, 160, 255))]
+    names = [("ZONE 1", "low", (90, 160, 255)), ("ZONE 2", "medium", (255, 200, 60)),
+             ("ZONE 3", "HIGH", (255, 60, 90)), ("ZONE 2", "medium", (255, 200, 60)),
+             ("ZONE 1", "low", (90, 160, 255))]
     to_px = lambda x: (x / fw + 0.5) * W
     for i, (n, s, c) in enumerate(names):
         x0, x1 = to_px(zones[i]), to_px(zones[i + 1])
@@ -245,7 +245,7 @@ def shot_mothership_zones():
         pct = round((zones[i + 1] - zones[i]) / width * 100)
         d.text(((x0 + x1) / 2, 170), f"{pct} %", font=font(18), fill=(*c, 255), anchor="mm")
     img = Image.alpha_composite(img.convert("RGBA"), ov).convert("RGB")
-    save(caption(img, "Trefferzonen des Mutterschiffs", "Laser 5/10/20 % · Strahl 10/20/30 %/s · Atomrakete 20/40/60 %"),
+    save(caption(img, "Mothership damage zones", "laser 5/10/20 % · beam 10/20/30 %/s · nuke 20/40/60 %"),
          "05_mothership_zones.png")
 
 
@@ -255,7 +255,7 @@ def shot_brain():
         b.setHpr(-35, 10, 0)
     fg, _ = render(build, (0, -9.5, 2.6), (0, 0, 0.1), fov=40)
     img = finish(fg, background(6, nebula=0, stars=0))
-    save(caption(img, "Boltzmann-Gehirn", "Level 4 · entsteht aus dem Nichts · verschwindet nach 1–3 s"), "06_boltzmann_brain.png")
+    save(caption(img, "Boltzmann Brain", "level 4 · forms out of the void · fades after 1–3 s"), "06_boltzmann_brain.png")
 
 
 def shot_black_hole():
@@ -263,7 +263,7 @@ def shot_black_hole():
         M.build_black_hole(r, 1.2)
     fg, _ = render(build, (0, -14, 3.5), (0, 0, 0), fov=40)
     img = finish(fg, background(7, tint=(0.3, 0.12, 0.05)), thr=0.55, strength=1.2)
-    save(caption(img, "Schwarzes Loch", "Level 6 / 7 · Akkretionsscheibe + Photonenring · zieht das Schiff an"),
+    save(caption(img, "Black Hole", "levels 6 / 7 · accretion disk + photon ring · pulls the ship in"),
          "07_black_hole.png")
 
 
@@ -281,11 +281,11 @@ def shot_explosion():
         crop = f.crop(((W - w3) // 2, 0, (W - w3) // 2 + w3, H))
         strip.paste(crop, (i * w3, 0))
     d = ImageDraw.Draw(strip)
-    for i, t in enumerate(("t = 0,1 s · Lichtblitz", "t = 0,5 s · Feuerball + Trümmer", "t = 1,0 s · Schockwelle")):
+    for i, t in enumerate(("t = 0.1 s · flash", "t = 0.5 s · fireball + debris", "t = 1.0 s · shockwave")):
         label(d, (i * w3 + w3 / 2, H - 40), t, size=22)
         if i:
             d.line([(i * w3, 0), (i * w3, H)], fill=(40, 40, 60), width=2)
-    caption(strip, "Explosion", "Schockwellen-Ring à la Todesstern · Knall erst, wenn die Welle das Schiff erreicht")
+    caption(strip, "Explosion", "Death-Star-style shockwave ring · the bang plays when the wave reaches the ship")
     save(strip, "08_explosion.png")
 
 
@@ -299,7 +299,7 @@ def shot_helmet():
         M.neon_edges(head, (0.3, 0.9, 1.0, 0.5), 1.0)
     fg, _ = render(build, (0, -10.5, 0.2), (0, 0, -0.25), fov=40)
     img = finish(fg, background(9, nebula=0.6))
-    save(caption(img, "AR-Helm (Webcam-Overlay)", "Lebenserhaltungs-Helm · offenes Hirn unter Glas · Schläuche · LEDs"),
+    save(caption(img, "AR Helmet (webcam overlay)", "life-support helmet · exposed brain under glass · tubes · status LEDs"),
          "09_helmet.png")
 
 
@@ -352,14 +352,14 @@ def hud_bar(d, x, y, w, h, frac, col, segs=20):
 def draw_hud(img, level_name, score, health, energy, weapon_idx, ammo=3, extra=None):
     ov = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
-    d.text((30, 22), "HÜLLE", font=font(18), fill=(120, 255, 160, 255))
+    d.text((30, 22), "HULL", font=font(18), fill=(120, 255, 160, 255))
     hud_bar(d, 110, 22, 260, 22, health, (90, 255, 140) if health > 0.35 else (255, 80, 80))
-    d.text((30, 54), "ENERGIE", font=font(18), fill=(100, 220, 255, 255))
+    d.text((30, 54), "ENERGY", font=font(18), fill=(100, 220, 255, 255))
     hud_bar(d, 110, 54, 260, 22, energy, (80, 210, 255))
     d.text((W - 30, 18), f"{score:07d}", font=font(40, True), fill=(255, 240, 180, 255), anchor="ra")
     d.text((W - 30, 66), level_name, font=font(18), fill=(255, 120, 220, 255), anchor="ra")
-    weapons = [("LASER", (120, 255, 90)), ("STRAHL", (90, 255, 220)), (f"ATOM ×{ammo}", (255, 90, 70)),
-               ("SCHILD", (90, 170, 255))]
+    weapons = [("LASER", (120, 255, 90)), ("BEAM", (90, 255, 220)), (f"NUKE ×{ammo}", (255, 90, 70)),
+               ("SHIELD", (90, 170, 255))]
     x0 = W // 2 - 2 * 130
     for i, (n, c) in enumerate(weapons):
         x = x0 + i * 130
@@ -373,7 +373,8 @@ def draw_hud(img, level_name, score, health, energy, weapon_idx, ammo=3, extra=N
     return img
 
 
-def draw_control_panel(game, webcam_info, tilt=-0.35, mouth=0.8, eyes_open=True, yaw=0.0, track="NEURAL BREAKS"):
+def draw_control_panel(game, webcam_info, tilt=-0.35, mouth=0.8, eyes_open=True, yaw=0.0, track="NEURAL BREAKS",
+                       layers="layers: drums · reese · arp"):
     ph = 250
     panel, cx, cw = webcam_info
     full = Image.new("RGB", (W, H + ph), (8, 9, 14))
@@ -383,7 +384,7 @@ def draw_control_panel(game, webcam_info, tilt=-0.35, mouth=0.8, eyes_open=True,
     d.line([(0, H), (W, H)], fill=(255, 60, 200), width=2)
     # left: gauges
     gx, gy = 30, H + 24
-    d.text((gx, gy), "STEUERUNG", font=font(18), fill=(255, 120, 220))
+    d.text((gx, gy), "CONTROLS", font=font(18), fill=(255, 120, 220))
 
     def gauge(y, name, v, lo, hi, col):
         d.text((gx, y), name, font=font(16), fill=(180, 200, 220))
@@ -392,20 +393,20 @@ def draw_control_panel(game, webcam_info, tilt=-0.35, mouth=0.8, eyes_open=True,
         d.line([((x0 + x1) / 2, y + 2), ((x0 + x1) / 2, y + 18)], fill=(70, 80, 100), width=2)
         px = x0 + (v - lo) / (hi - lo) * (x1 - x0)
         d.ellipse([px - 7, y + 3, px + 7, y + 17], fill=col)
-    gauge(gy + 34, "Neigen", tilt, -1, 1, (120, 255, 160))
-    gauge(gy + 68, "Drehen", yaw, -1, 1, (255, 200, 80))
-    gauge(gy + 102, "Mund", mouth * 2 - 1, -1, 1, (255, 90, 90))
-    d.text((gx, gy + 136), "Augen", font=font(16), fill=(180, 200, 220))
-    d.text((gx + 130, gy + 134), "OFFEN" if eyes_open else "GESCHLOSSEN", font=font(18),
+    gauge(gy + 34, "Tilt", tilt, -1, 1, (120, 255, 160))
+    gauge(gy + 68, "Turn", yaw, -1, 1, (255, 200, 80))
+    gauge(gy + 102, "Mouth", mouth * 2 - 1, -1, 1, (255, 90, 90))
+    d.text((gx, gy + 136), "Eyes", font=font(16), fill=(180, 200, 220))
+    d.text((gx + 130, gy + 134), "OPEN" if eyes_open else "CLOSED", font=font(18),
            fill=(120, 255, 160) if eyes_open else (255, 120, 220))
-    d.text((gx, gy + 176), "Gesicht erkannt · 30 fps", font=font(15), fill=(100, 140, 170))
+    d.text((gx, gy + 176), "face tracked · 30 fps", font=font(15), fill=(100, 140, 170))
     # right: music + hints
     rx = cx + cw + 30
     d.text((rx, gy), "SOUNDTRACK", font=font(18), fill=(255, 120, 220))
     d.text((rx, gy + 32), track, font=font(20), fill=(220, 230, 255))
     for i, h in enumerate([0.4, 0.9, 0.6, 1.0, 0.7, 0.5, 0.85, 0.3, 0.65, 0.95, 0.55, 0.75]):
         d.rectangle([rx + i * 16, gy + 110 - h * 40, rx + i * 16 + 10, gy + 110], fill=(90, 220, 255))
-    d.text((rx, gy + 128), "Schicht: Drums · Reese · Arp", font=font(15), fill=(120, 150, 180))
+    d.text((rx, gy + 128), layers, font=font(15), fill=(120, 150, 180))
     d.rectangle([cx, H, cx + cw - 1, H + ph - 1], outline=(255, 60, 200), width=2)
     return full
 
@@ -428,7 +429,7 @@ def shot_ingame_l1():
         e.setPos(-3, 6.5, 0)
     fg, _ = render(build, (0, -27, 19), (0, 2.5, 0), fov=50)
     img = finish(fg, background(11))
-    img = draw_hud(img, "LEVEL 1 · ASTEROIDENGÜRTEL", 1250, 0.78, 0.55, 0)
+    img = draw_hud(img, "LEVEL 1 · ASTEROID BELT", 1250, 0.78, 0.55, 0)
     full = draw_control_panel(img, webcam_panel(W, 250), tilt=0.4, mouth=0.85)
     save(full, "10_ingame_level1.png")
 
@@ -453,19 +454,108 @@ def shot_ingame_l7():
         for i, (x, y, rad) in enumerate([(-9, 6, 0.6), (8.5, 9, 0.7)]):
             M.build_asteroid(r, 700 + i, rad, 1).setPos(x, y, 0)
     fg, _ = render(build, (0, -27, 19), (0, 3.5, 0), fov=52)
-    img = finish(fg, background(12, tint=(0.5, 0.06, 0.3)), thr=0.6)
+    img = finish(fg, background(12, tint=(0.45, 0.03, 0.05), tint2=(0.1, 0.03, 0.15)), thr=0.6)
 
     def extra(d):
         bx, by, bw = W // 2 - 300, 78, 600
-        d.text((W // 2, by), "DIE MUTTER", font=font(18), fill=(255, 90, 160, 255), anchor="mm")
+        d.text((W // 2, by), "THE MOTHER", font=font(18), fill=(255, 90, 160, 255), anchor="mm")
         d.rectangle([bx, by + 14, bx + bw, by + 30], outline=(255, 90, 160, 255), width=2)
         d.rectangle([bx + 3, by + 17, bx + 3 + (bw - 6) * 0.62, by + 27], fill=(255, 60, 140, 230))
-        d.text((W // 2, H // 2 + 40), "HYPNO-PULS  ·  AUGEN SCHLIESSEN!  2,4 s", font=font(34),
+        d.text((W // 2, H // 2 + 40), "HYPNO PULSE  ·  CLOSE YOUR EYES!  2.4 s", font=font(34),
                fill=(255, 120, 230, 255), anchor="mm")
-    img = draw_hud(img, "LEVEL 7 · DAS MUTTERSCHIFF", 48210, 0.46, 0.3, 3, ammo=2, extra=extra)
+    img = draw_hud(img, "LEVEL 7 · THE MOTHER", 48210, 0.46, 0.3, 3, ammo=2, extra=extra)
     full = draw_control_panel(img, webcam_panel(W, 250, roll=8), tilt=-0.25, mouth=0.1, yaw=0.0,
-                              track="MOTHER OF CATS", eyes_open=True)
+                              track="MOTHER OF CATS", eyes_open=True,
+                              layers="layers: halftime · wobble · choir")
     save(full, "11_ingame_level7.png")
+
+
+def splatter(img, seed, spots):
+    """Blood and brain matter on the 'screen glass'. spots: [(x, y, size), ...] in pixels."""
+    rng = np.random.default_rng(seed)
+    ov = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    for cx, cy, size in spots:
+        for _ in range(14):  # main blob: union of circles
+            r = size * rng.uniform(0.25, 0.6)
+            ox, oy = rng.normal(0, size * 0.35, 2)
+            d.ellipse([cx + ox - r, cy + oy - r, cx + ox + r, cy + oy + r], fill=(105, 0, 8, 225))
+        for _ in range(26):  # flung droplets with streaks
+            ang = rng.uniform(0, 2 * np.pi)
+            dist = size * rng.uniform(0.9, 2.4)
+            px, py = cx + np.cos(ang) * dist, cy + np.sin(ang) * dist
+            r = size * rng.uniform(0.03, 0.12)
+            d.line([(cx + np.cos(ang) * size * 0.6, cy + np.sin(ang) * size * 0.6), (px, py)],
+                   fill=(110, 0, 10, 160), width=max(1, int(r * 0.8)))
+            d.ellipse([px - r, py - r, px + r, py + r], fill=(120, 0, 10, 230))
+        for _ in range(5):  # drips running down
+            x = cx + rng.uniform(-0.6, 0.6) * size
+            ln = size * rng.uniform(0.5, 1.8)
+            w = size * rng.uniform(0.05, 0.1)
+            d.rounded_rectangle([x - w, cy, x + w, cy + ln], radius=int(w), fill=(95, 0, 6, 220))
+            d.ellipse([x - w * 1.5, cy + ln - w, x + w * 1.5, cy + ln + w * 2], fill=(95, 0, 6, 230))
+        for _ in range(9):  # brain matter lumps
+            ox, oy = rng.normal(0, size * 0.45, 2)
+            rw, rh = size * rng.uniform(0.07, 0.17), size * rng.uniform(0.05, 0.12)
+            col = (225, int(rng.uniform(120, 150)), 145, 245)
+            d.ellipse([cx + ox - rw, cy + oy - rh, cx + ox + rw, cy + oy + rh], fill=col, outline=(120, 40, 50, 255))
+            d.ellipse([cx + ox - rw * 0.4, cy + oy - rh * 0.6, cx + ox, cy + oy - rh * 0.1], fill=(255, 220, 225, 200))
+    ov = ov.filter(ImageFilter.GaussianBlur(0.8))
+    hl = Image.new("RGBA", img.size, (0, 0, 0, 0))  # wet highlights
+    dh = ImageDraw.Draw(hl)
+    for cx, cy, size in spots:
+        for _ in range(10):
+            ox, oy = rng.normal(0, size * 0.4, 2)
+            r = size * rng.uniform(0.02, 0.06)
+            dh.ellipse([cx + ox - r, cy + oy - r, cx + ox + r * 0.6, cy + oy + r * 0.6], fill=(255, 200, 200, 140))
+    out = Image.alpha_composite(img.convert("RGBA"), ov)
+    return Image.alpha_composite(out, hl).convert("RGB")
+
+
+def shot_brain_burst():
+    frames = []
+    for t in (0.0, 0.25, 0.6):
+        def build(r, t=t):
+            if t == 0:
+                M.build_brain(r, 1.2)
+            else:
+                M.build_brain_burst(r, t, scale=1.2)
+        fg, _ = render(build, (0, -11, 3.0), (0, 0, 0), fov=40)
+        frames.append(finish(fg, background(6, nebula=0, stars=0), thr=0.6))
+    strip = Image.new("RGB", (W, H))
+    w3 = W // 3
+    for i, f in enumerate(frames):
+        strip.paste(f.crop(((W - w3) // 2, 0, (W - w3) // 2 + w3, H)), (i * w3, 0))
+    strip = splatter(strip, 4, [(2 * w3 + 120, 300, 90), (2 * w3 + 330, 520, 55)])
+    d = ImageDraw.Draw(strip)
+    for i, t in enumerate(("intact", "hit · burst", "splatter on screen, fades in ~3 s")):
+        label(d, (i * w3 + w3 / 2, H - 40), t, size=22)
+        if i:
+            d.line([(i * w3, 0), (i * w3, H)], fill=(40, 30, 40), width=2)
+    caption(strip, "Brain Burst", "shot Boltzmann brains explode into blood and brain matter")
+    save(strip, "12_brain_burst.png")
+
+
+def shot_ingame_l4():
+    def build(r):
+        s = M.build_ship(r)
+        s.setPos(-1.5, -6.0, 0)
+        s.setR(-8)
+        rng = np.random.default_rng(4)
+        for (x, y) in ((-7, 10), (4.5, 13), (8, 5), (-4, 3.5), (1.5, 8.5), (-9, 15)):
+            b = M.build_brain(r, 0.55)
+            b.setPos(x, y, 0.4)
+            b.setHpr(*rng.uniform(-40, 40, 3))
+        M.build_brain_burst(r, 0.3, scale=0.8).setPos(2.5, 0.5, 0.4)
+        for y in (-2.0, 1.5):
+            M.build_laser_bolt(r, (-1.5 + 0.88, y, 0))
+    fg, _ = render(build, (0, -27, 19), (0, 2.5, 0), fov=50)
+    img = finish(fg, background(13, nebula=0, stars=0))
+    img = splatter(img, 9, [(980, 260, 85), (1140, 470, 45), (850, 520, 30)])
+    img = draw_hud(img, "LEVEL 4 · THE VOID", 9870, 0.64, 0.7, 0)
+    full = draw_control_panel(img, webcam_panel(W, 250), tilt=-0.15, mouth=0.9, track="NOTHING ANSWERS",
+                              layers="layers: drone · heartbeat · whispers")
+    save(full, "13_ingame_level4.png")
 
 
 SHOTS = {n[5:]: f for n, f in globals().items() if n.startswith("shot_")}
