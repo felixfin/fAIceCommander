@@ -1,0 +1,148 @@
+Vor einigen Jahren habe ich einen 2D Spaceshooter namens FaceCommander in NodeJS programmiert.
+Das Besondere an dem Spiel war, dass ein Raumschiff nicht über die Tastatur, sondern per Gesichtsgestenerkennung durch Auswertung des Webcam Streams gelenkt wurde.
+
+Die Steuerung war wie folgt:
+- Das Raumschiff hat kontinuierlich Vorwärtsshub, ohne dass der Spieler etwas tun muss
+- Kopf nach links neigen (Rotationsachse entspricht der optischen Achse der Webcam): Raumschiff bewegt sich nach links
+- Kopf nach rechts neigen (Rotationsachse entspricht der optischen Achse der Webcam): Raumschiff bewegt sich nach rechts
+- Kopf nach links drehen (Rotationsachse entspricht der Wirbelsäule): Vorherige Waffe/Fähigkeit auswählen
+- Kopf nach rechts drehen (Rotationsachse entspricht der Wirbelsäule): Nächste Waffe/Fähigkeit auswählen
+- Mund öffnen: Schießen / Fähigkeit aktivieren/deaktivieren
+
+Tech Stack:
+- Gamelogik / Gameloop / Assets laden und anzeigen: p5.js, pf.play
+- Gesichtserkennung: 
+-- mediapipe/face_mesh
+-- mediapipe/camera_utils
+-- mediapipe/control_utils
+-- mediapipe/drawing_utils
+
+Ich habe einige Screenshots im Verzeichns prompts/screenshots abgelegt. Schau dir diese bitte als Orientierung an.
+
+Es gab nur ein Level: Zufällig platzierte Asteoriden unterschiedlicher Größen und mit zufälliger Eigengeschwindigkeit mussten entweder abgeschossen oder man muss ihnen ausweichen. Es gab zwei Waffen, die nicht gleichzeitig genutzt werden konnten: 1) Laser Kanone (güner Punkt) zum Abschießen (für kleine Asteoriden reicht ein Treffer, für große werden zwei benötigt). 2) Energieschild. Verringert den Schaden bei Kollisionen. Beide Waffen verbrauchen Energie (Laser pro Schuss, Energieschield kontinuierlich). Diese lädt sich automatisch wieder auf, wenn die Fähigkeiten gerade inaktiv sind. Ist die Lebensenergie aufgebraucht (die sich nur langsam regeneriert), ist man Game Over. Im Hintergrund gab es coole, abwechslungsreiche DnB Musik. 
+
+Außerdem viele Soundeffekte: 
+- Laser (zirrr)
+- Kollision mit Asteroriden (dumpfer Schlag)
+- Shield (elektronisches Surren)
+- Treffer/Zerstörung eines Asteroiden: Explosionsgeräusch (erst, sobald die Materiewelle das Raumschiff erreicht)
+
+Visuelle Effekte / Animationen:
+- Explosionen beim Zerstören der Asteoriden
+- Zusätzlich einen sich ausbreitenden Kreis um den zerstörten Asteroiden, wie bei Starwars (Zerstörung des Todessterns)
+- Kollision mit Asteorid: Gesamter Bildschirm färbt sich kurz blutrot (transparent, wie eine Art Schlag).
+- Webcam Feed wurde gespiegelt (wie ein echtes Spiegelbild) unter dem Spielfeld angezeigt. Die durch face_mesh gefundenen, für die Steuerung relevanten Landmarken wurden als farbige Punkte eingezeichnet
+
+Es gab kein Ende des Spiels und noch keine verschiedenen Levels.
+
+Kannst du dieses Spiel für mich in Python als Desktopanwendung (nicht Browsergame wie früher) programmieren?
+
+Allerdings soll es folgende Modifikationen geben:
+0) Name des Spiels: fAIceCommander 3D
+1) Das Spiel soll 3D sein
+2) Professionellere Grafik (ist aber nicht der Hauptfokus des Spiels, es geht mehr um die Idee / das Spielprinzip). Darf gerne auch etwas retro wirken.
+3) Animierende Hintergrundmusik (in die Richtung Jump up Drum and Base / Dubstep / Cyber Punk / mysteriöse Weltraummusik / elektronisch)
+4) Die Musik soll sich den jeweiligen Spielsituationen / Levels anpassen
+5) Statt farbiger Punkte soll ein Skin/Helm oder etwas in der Art dem Webcam Bild live überlagert werden. Am liebsten eine Art Helm mit einem offenen Hirn oder so.
+6) Es soll ein Highscore Board geben
+7) Es sollen folgende Levels abgebildet werden:
+
+Level 1:
+Only asteroids of category 1: Randomly generated asteroids with width between 10 and 30 pixels
+Always three asteroids created at random x-position at the top of the screen with random speed and direction
+One hit with normal weapon to destroy an asteroid of category 1
+25% energy loss when colliding with asteroid of category 1
+
+Level 2:
+Four category 1 asteroids
+One category 2 asteroid:
+Between 30 and 50 pixels
+Breaks into up to three category 1 asteroids when shot (actual number random and random directions)
+Two hints with normal weapon to destroy
+Or 2 seconds with laser beam
+or 1 nuclear rocket
+50% energy loss when colliding with asteroid of category 2
+
+Level 3:
+Less dens asteroid field (only one or two category 1 asteroids at a time)
+Hypno light pulses
+Hypno light pulses are anounced 3 seconds before they arrive
+The player has to close their eyes during the entire duration of the hypno light pulse (10 seconds)
+During the hypno light puls objects in front of the space ship are detected via sonar (beep, beep, ...)
+If the player keeps one or more eyes open during the hypno light pulse, the space ship is frozen for the remaining duration of the pulse
+
+Level 4:
+Complete void (no asteroids, no stars, nothing)
+Boltzmann brains form in the void
+At random positions on the entire screen (always ahead of the space ship, never directly on the position of the space ship)
+Each brain around 25% size of the space ship (relatively small)
+Up to 10 brains at the same time
+Each brain disappears automatically after a random time (between 1 and 3 seconds)
+5% energy loss when colliding with a Boltzmann brain
+
+Level 5:
+Between one and three category 1 asteroids
+Two Catlien space fighters have to be destroyed
+The fighters stay always in the screen and move in all four directions
+The fighters try to shoot at the space ship
+Each shot from a figther means 10% energy loss for the space ship
+How to kill one figher:
+6 shots of normal weapon
+4 seconds laser beam
+2 nuklear rockets
+
+Level 6:
+Same as level 1, but in addition black holes are present
+Zero or one black hole at a time
+One must steer in the opposite direction of the attraction force
+If getting too close to the black hole, the space ship is absorbed (game over)
+
+Level 7:
+Catlien mother ship (end boss)
+Mother ship always stays at the top of the screen and only moves horizontally
+Three different weapons:
+Small shots with relatively high frequency (one each 4 seconds) aiming at the position of the space ship (each hit 5% energy loss)
+Artificial black hole
+Bomb sent into direction of the space ship
+There forming a small black hole trying to attract the space ship
+Constantly absorbing energy of the space ship (if too close): 5% per second
+Collapsing after 10 seconds
+Very low frequency (around one each two minutes)
+Hypno light pulse
+Propagating from mother ship to player
+Player has to close eyes before the light pulses reach the space ship
+During the entire duration of the puls the mother ship can only fire small shots
+Small shots are detected by the sonar just like the asteroids
+Each pulse between 5 and 10 seconds
+If player keeps their eyes open, the space ship is frozen till the end of the pulse
+Right after the end of a hypno pulse the mother ship's damage sensitivity is 50% increased for a time span of 10 seconds
+Mother ships energy regenerates automatically over time (hence the player has to deal damage quickly)
+The mother ship is divided into different regions with different sensitivities regarding damage:
+Zone 1: Outer 30% of width on each side: Lowest sensitivity
+Zone 2: Inner 15% of width next two zone 1: Middle sensitivity
+Zone 3: Inner 10% of width between the two zone 2 areas: Highest sensitivity
+How to kill the mother ship
+Normal weapon: 5% / 10% / 20% energy loss
+Laser beam: 10% / 20% / 30% energy loss per second
+Nuclear rocket: 20% / 40% / 60% energy loss
+
+Außerdem soll es ein kurzes, dystopisches, spannendes Intro geben.
+
+Background / Geschichte: 
+Seit Jahrhunderten herrscht ein unerbitterlicher Krieg zwischen der Menschheit und der Alienrasse Catliens (katzenartige, hochintelligente, erbarmungslose Aliens). Die Catliens stehen kurz vor dem endgültigen Sieg und der damit einhergehenden Auslöschung bzw. vollständigen Versklavung der Menschheit. Ein Großteil der Menschen ist bereits versklavt und dient den Catliens höherer Kasten als Haustiere. Insbesondere werden männliche Menschen, von Catliens als "Männchen" bezeichnet, kastriert um deren Aggressivität zu verringern. Frauen, in der Sprache der Catliens "Weibchen", werden künstlich befruchtet um dauerhaft an die von Catliens begehrte Menschenmilch zu gelangen.
+Catliens agieren schwarmartig, werden jedoch von einer zentralen Stelle im Universum von ihrer Katzenkönign, der "Mutter", koordiniert. Die Mutter befindet sich im Mutterschiff. Wird das Mutterschiff zerstört, bricht Chaos unter den im Universum verteilten Catliens aus. Die letzte Hoffung der Menscheit, das Schicksal zu wenden, liegt daher in der Vernichtung des Mutterschiffs.
+Leider ist der genaue Standort des Mutterschiffs unbekannt. Bisher gelang es nur einem tapferen Menschenkrieger, Commander James Nathaniel Honor zusammen mit einer kleinen Flotte die Position des Mutterschiffes ausfindig zu machen. In einer erbarmungslosen Schlacht wurde dem Mutterschiff zwar erheblichen Schaden zugefügt, sodass es auf unbestimmte Zeit keine Reisen mit Hyperlichtgeschwindigkeit durchführen kann, aber auch James komplette Flotte zerstört. Er selbst überlebt nur knapp und wird in einer automatisch abgestoßenen Rettungskapsel geborgen - zumindest das, was von ihm noch übrig ist: Die KI-Chirurgen des Rettungsteams können nur noch James Kopf und einen Teil seines Oberkörpers retten. James liegt Tage im Koma, während KI-Wissenschaftler eine wahnwitzige Mission vorbereiten. Die Ressourcen der Menscheit sind fast aufgebraucht, es gibt nur einen letzten Versuch. So entwickeln sie ein Spezialraumschiff aus alten Komponenten beschädigter Kriegsschiffe mit einer speziellen Aparatur, die James Kopf bzw. Oberkörper künstlich am Leben hält. Damit verschmiltzt er quasi vollständig mit dem Raumschiff - die Geburt des FaceCommander! Das Spiel beginnt damit, dass James aus dem Koma geweckt wird. Leider weiß er nicht wo er ist oder wer er ist, glücklicherweise erinnert er sich aber an den Weg zum Mutterschiff - jedoch nur von Stern zu Stern. Die verrückten Wissenschaftler informieren FaceCommander über die Situation und schicken ihn auf die alles entscheidende, letzte Mission: "FaceCommander - du bist unsere letzte Hoffnung".
+
+Erstelle im Rahmen der Implementierung ein kleines Intro Video, das die obige Geschichte zusammenfasst. Insbesondere soll alles sehr düster, dystopisch, dramatisch sein. Unbedingt soll das Intro mit dem Satz "FaceCommander - du bist unsere letzte Hoffnung" enden. Das Intro soll man überspringen können. Dann soll das Spiel im ersten Level beginnen.
+
+Als Sprache würde ich Python vorschlagen, aber wenn du gute Gründe für eine andere Wahl hast, leg dies gerne dar.
+
+Kannst du das umsetzen? Kannst du mir bitte vor dem Beginn der Umsetzung dein Konzept vorstellen? Erstelle insbesondere Screenshots von den wichtigsten Grafiken wie dem Raumschiff, den Asteroiden, Catliens etc. und den Explosionen etc. Alles soll super cool aussehen, darf aber auch ein bisschen retromäßig sein (keine High-End Grafik). Nimm bitte nur Bibliotheken, die sich von der Lizenz her eignen für ein solches Spiel (z. B. MIT, Apache 2.0 etc.). Keine kommerziellen Bibliotheken oder Bibliotheken, die eine Veröffentlichung des Source Codes erzwingen. Gib bitte auch keine kurze Kostprobe der Musik zusammen mit deinem Konzept. Stelle auch das Stuerkonzept in 3 Dimensionen per Gesichtserkennung vor. Falls die Lenkung zu kompliziert in 3D ist, könnte man die Szene auch als Pseudo-3D rendern und so ähnlich wie beim 2D-Vorgänger gestalten (die sehr robust war). Stelle bitte Rückfragen, wenn dir etwas noch unklar ist. Erst nach der Vorstellung deines Konzepts und der Klärung der Rückfragen darf mit der Implementierung begonnen werden.
+
+
+
+
+
+
+
+
