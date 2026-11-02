@@ -137,12 +137,6 @@ Erstelle im Rahmen der Implementierung ein kleines Intro Video, das die obige Ge
 
 Als Sprache würde ich Python vorschlagen, aber wenn du gute Gründe für eine andere Wahl hast, leg dies gerne dar.
 
-Kannst du das umsetzen? Kannst du mir bitte vor dem Beginn der Umsetzung dein Konzept vorstellen? Erstelle insbesondere Screenshots von den wichtigsten Grafiken wie dem Raumschiff, den Asteroiden, Catliens etc. und den Explosionen etc. Alles soll super cool aussehen, darf aber auch ein bisschen retromäßig sein (keine High-End Grafik). Nimm bitte nur Bibliotheken, die sich von der Lizenz her eignen für ein solches Spiel (z. B. MIT, Apache 2.0 etc.). Keine kommerziellen Bibliotheken oder Bibliotheken, die eine Veröffentlichung des Source Codes erzwingen. Gib bitte auch keine kurze Kostprobe der Musik zusammen mit deinem Konzept. Stelle auch das Stuerkonzept in 3 Dimensionen per Gesichtserkennung vor. Falls die Lenkung zu kompliziert in 3D ist, könnte man die Szene auch als Pseudo-3D rendern und so ähnlich wie beim 2D-Vorgänger gestalten (die sehr robust war). Stelle bitte Rückfragen, wenn dir etwas noch unklar ist. Erst nach der Vorstellung deines Konzepts und der Klärung der Rückfragen darf mit der Implementierung begonnen werden.
+Kannst du das umsetzen? Kannst du mir bitte vor dem Beginn der Umsetzung dein Konzept vorstellen? Erstelle insbesondere Screenshots von den wichtigsten Grafiken wie dem Raumschiff, den Asteroiden, Catliens etc. und den Explosionen etc. Alles soll super cool aussehen, darf aber auch ein bisschen retromäßig sein (keine High-End Grafik). Nimm bitte nur Bibliotheken, die sich von der Lizenz her eignen für ein solches Spiel (z. B. MIT, Apache 2.0 etc.). Keine kommerziellen Bibliotheken oder Bibliotheken, die eine Veröffentlichung des Source Codes erzwingen. Gib bitte auch eine kurze Kostprobe der Musik zusammen mit deinem Konzept. Stelle auch das Stuerkonzept in 3 Dimensionen per Gesichtserkennung vor. Falls die Lenkung zu kompliziert in 3D ist, könnte man die Szene auch als Pseudo-3D rendern und so ähnlich wie beim 2D-Vorgänger gestalten (die sehr robust war). Stelle bitte Rückfragen, wenn dir etwas noch unklar ist. Erst nach der Vorstellung deines Konzepts und der Klärung der Rückfragen darf mit der Implementierung begonnen werden.
 
-
-
-
-
-
-
-
+Benachrichtige mich über einen Sound. Jedes mal, wenn du mit einer aktuellen Aufgabe fertig bist.
