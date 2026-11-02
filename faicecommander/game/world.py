@@ -10,9 +10,6 @@ from .entities.projectiles import BoltTemplate, LaserBolt, Nuke, NukeTemplate
 from .entities.ship import Ship
 from .weapons import Weapons
 
-BEAM_HALF_WIDTH = 0.25
-
-
 class World:
     def __init__(self, base, cfg):
         self.base, self.cfg = base, cfg
@@ -28,6 +25,7 @@ class World:
         self.nuke_accel = self.u(cfg["weapons.nuke.accel_px"])
         self.nuke_radius = self.u(cfg["weapons.nuke.blast_radius_px"])
         self.nuke_fuse = cfg["weapons.nuke.fuse_s"]
+        self.beam_half_width = self.u(cfg["weapons.beam.half_width_px"])
         self.targets = {1: cfg["targets.asteroid_1"].dict(), 2: cfg["targets.asteroid_2"].dict()}
         self.ship = Ship(self.root, cfg, self.u)
         self.weapons = Weapons(cfg, self.u)
@@ -153,7 +151,7 @@ class World:
         ship = self.ship
         y0 = ship.prow_y
         hits = [a for a in self.asteroids if a.alive and a.y > y0 - a.radius
-                and abs(a.x - ship.x) < a.radius + BEAM_HALF_WIDTH]
+                and abs(a.x - ship.x) < a.radius + self.beam_half_width]
         target = min(hits, key=lambda a: a.y - a.radius) if hits else None
         y1 = max(y0, target.y - a_radius_on_axis(target, ship.x)) if target else self.top_y + 4
         self.beam.show(ship.x, y0, y1, target is not None, dt)

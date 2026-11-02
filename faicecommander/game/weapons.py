@@ -13,6 +13,7 @@ class Weapons:
         self.laser_speed = units(cfg["weapons.laser.speed_px"])
         self.laser_interval = cfg["weapons.laser.min_interval_s"]
         self.beam_drain = cfg["weapons.beam.energy_per_s"]
+        self.beam_grace = cfg["weapons.beam.grace_s"]
         self.nuke_cost = cfg["weapons.nuke.energy_cost"]
         self.shield_drain = cfg["weapons.shield.energy_per_s"]
         self.energy_regen = cfg["ship.energy_regen_per_s"]
@@ -26,6 +27,7 @@ class Weapons:
         self.cooldown = 0.0
         self.idle = 99.0
         self.beam_on = False
+        self.beam_hold = 0.0
 
     def update(self, dt, ctl, ship, world):
         """world provides fire_laser(x, y, speed), fire_nuke(x, y) and emit(event)."""
@@ -64,7 +66,9 @@ class Weapons:
                     world.emit(("shield", ship.shield_on))
                 else:
                     world.emit(("empty",))
-        self.beam_on = active and self.selected == "beam" and ctl.mouth_open and ship.energy > 0
+        # a short grace period bridges a jaw that relaxes for a moment while holding the beam
+        self.beam_hold = self.beam_grace if ctl.mouth_open else max(0.0, self.beam_hold - dt)
+        self.beam_on = active and self.selected == "beam" and self.beam_hold > 0 and ship.energy > 0
         if self.beam_on:
             ship.energy = max(0.0, ship.energy - self.beam_drain * dt)
             self.idle = 0.0

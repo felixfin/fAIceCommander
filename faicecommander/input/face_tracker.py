@@ -118,10 +118,19 @@ class FaceTracker:
             return FaceState(found=False, timestamp=time.monotonic(), frame=frame, frame_id=frame_id)
         lm = np.array([(p.x * w, p.y * h, p.z * w) for p in result.face_landmarks[0]], np.float32)
         l, r = lm[EYE_OUTER_LEFT], lm[EYE_OUTER_RIGHT]
-        tilt = math.degrees(math.atan2(r[1] - l[1], r[0] - l[0]))
-        cl, cr = lm[CHEEK_LEFT][0], lm[CHEEK_RIGHT][0]
+        roll = math.atan2(r[1] - l[1], r[0] - l[0])
+        tilt = math.degrees(roll)
+        # measure the turn in the head's own (un-tilted) frame, so tilting to steer is not read as turning
+        c, s = math.cos(-roll), math.sin(-roll)
+        mid = (l[:2] + r[:2]) / 2
+
+        def upright_x(i):
+            dx, dy = lm[i][0] - mid[0], lm[i][1] - mid[1]
+            return c * dx - s * dy
+
+        cl, cr = upright_x(CHEEK_LEFT), upright_x(CHEEK_RIGHT)
         half = max(abs(cr - cl) / 2, 1.0)
-        turn = (lm[NOSE_TIP][0] - (cl + cr) / 2) / half
+        turn = (upright_x(NOSE_TIP) - (cl + cr) / 2) / half
         bs = {c.category_name: c.score for c in result.face_blendshapes[0]} if result.face_blendshapes else {}
         return FaceState(found=True, timestamp=time.monotonic(), tilt_deg=tilt, turn=turn,
                          jaw_open=bs.get("jawOpen", 0.0),

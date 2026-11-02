@@ -1,4 +1,6 @@
 """Face-control logic with synthetic tracker data (no webcam needed)."""
+import types
+
 import numpy as np
 
 from faicecommander.config import Config
@@ -125,3 +127,38 @@ def test_helmet_matrix_follows_roll():
     lm[CHIN] = (310, 330, 0)
     m = WebcamView._helmet_matrix(lm, 640, 480)
     assert m.getCell(0, 2) < 0  # helmet x axis points down to the right, like the eye line
+
+
+def _fake_result(points):
+    lm = [types.SimpleNamespace(x=x / 640, y=y / 480, z=0.0) for x, y in points]
+    return types.SimpleNamespace(face_landmarks=[lm], face_blendshapes=[])
+
+
+def _face(turn_px=0.0, roll_deg=0.0):
+    """Frontal face; turn_px shifts the nose sideways; the whole face is then rolled about its centre."""
+    from faicecommander.input.face_tracker import CHEEK_LEFT, CHEEK_RIGHT, NOSE_TIP
+    pts = np.full((478, 2), (320.0, 240.0))
+    pts[EYE_OUTER_LEFT], pts[EYE_OUTER_RIGHT] = (280, 220), (360, 220)
+    pts[CHEEK_LEFT], pts[CHEEK_RIGHT] = (250, 250), (390, 250)
+    pts[NOSE_TIP] = (320 + turn_px, 262)
+    a = np.radians(roll_deg)
+    rot = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+    pts = (pts - (320, 240)) @ rot.T + (320, 240)
+    return _fake_result(pts)
+
+
+def test_tilting_the_head_is_not_read_as_turning():
+    from faicecommander.input.face_tracker import FaceTracker
+    frame = np.zeros((480, 640, 3), np.uint8)
+    for roll in (-25, -12, 12, 25):
+        st = FaceTracker._analyse(_face(0, roll), frame, 1)
+        assert abs(st.tilt_deg - roll) < 0.5
+        assert abs(st.turn) < 0.02
+
+
+def test_turning_survives_a_tilted_head():
+    from faicecommander.input.face_tracker import FaceTracker
+    frame = np.zeros((480, 640, 3), np.uint8)
+    straight = FaceTracker._analyse(_face(40, 0), frame, 1).turn
+    tilted = FaceTracker._analyse(_face(40, 20), frame, 1).turn
+    assert straight > 0.5 and abs(tilted - straight) < 0.02

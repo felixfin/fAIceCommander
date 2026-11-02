@@ -16,7 +16,7 @@ fps = 30
 [controls]
 tilt_deadzone_deg = 4.0     # head roll below this is ignored
 tilt_full_deg = 22.0        # head roll for full sideways speed
-turn_threshold = 0.38       # normalized nose offset that switches the weapon
+turn_threshold = 0.42       # normalized nose offset that switches the weapon
 turn_rearm = 0.18           # must come back below this before the next switch
 turn_lockout_s = 0.6
 mouth_open_ratio = 0.55     # 0 = calibrated closed mouth, 1 = calibrated wide open
@@ -48,6 +48,8 @@ energy_per_s = 10.0
 
 [weapons.beam]
 energy_per_s = 15.0
+half_width_px = 8      # hit width matches the visible glow
+grace_s = 0.2          # keeps firing through a brief relaxed jaw
 
 [weapons.nuke]
 energy_cost = 30.0
@@ -59,12 +61,12 @@ fuse_s = 2.0
 # What it takes to destroy a target: laser hits / beam seconds / nukes (design spec)
 [targets.asteroid_1]
 laser = 1
-beam = 0.5
+beam = 0.25
 nuke = 1
 
 [targets.asteroid_2]
 laser = 2
-beam = 2.0
+beam = 1.0
 nuke = 1
 
 [effects]

@@ -45,9 +45,9 @@ class Asteroid:
         self.node.setPos(self.x, self.y, 0)
         self.node.setHpr(*self.hpr)
         self.beam_heat = max(0.0, self.beam_heat - dt * 3)
-        if self.beam_heat > 0:
-            h = 1 + self.beam_heat * 1.5
-            self.node.setColorScale(h, 1 + self.beam_heat * 0.6, 1, 1)
+        heat = self.beam_heat * 0.6 + (1.0 - self.health) * 1.4  # damage taken shows as a lasting glow
+        if heat > 0.01:
+            self.node.setColorScale(1 + heat * 1.6, 1 + heat * 0.55, 1 + heat * 0.1, 1)
         else:
             self.node.clearColorScale()
 

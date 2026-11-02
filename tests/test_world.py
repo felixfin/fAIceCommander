@@ -36,11 +36,35 @@ def test_category_2_needs_two_laser_hits(world):
     assert a.hurt("laser")
 
 
-def test_category_2_needs_two_seconds_of_beam(world):
+def test_category_2_beam_time_matches_config(world):
     a = big(fresh(world))
-    for _ in range(59):
+    frames = round(CFG["targets.asteroid_2.beam"] * 30)
+    for _ in range(frames - 1):
         assert not a.hurt("beam", 1 / 30)
     assert a.hurt("beam", 1 / 30 + 1e-6)
+
+
+def test_beam_destroys_a_moving_asteroid_while_tracking_it(world):
+    w = fresh(world, split=False)
+    w.weapons.selected = "beam"
+    a = w.spawn_asteroid(1, (20, 20), None, 0, 25, 100, x=w.ship.x + 0.6, y=w.ship.y + 12, vel=(2.0, -3.0))
+    t = 0.0
+    while a.alive and t < 2.0:
+        w.update(1 / 60, Controls(mouth_open=True, steer=1.0 if a.x > w.ship.x else -1.0))
+        t += 1 / 60
+    assert not a.alive and t < CFG["targets.asteroid_1.beam"] + 0.2
+
+
+def test_beam_bridges_a_brief_relaxed_jaw(world):
+    w = fresh(world, split=False)
+    w.weapons.selected = "beam"
+    w.update(1 / 60, Controls(mouth_open=True))
+    for _ in range(int(CFG["weapons.beam.grace_s"] * 60) - 2):
+        w.update(1 / 60, Controls(mouth_open=False))
+        assert w.weapons.beam_on
+    for _ in range(5):
+        w.update(1 / 60, Controls(mouth_open=False))
+    assert not w.weapons.beam_on
 
 
 def test_one_nuke_destroys_category_2(world):
