@@ -175,7 +175,7 @@ def shot_ship():
         s.setHpr(25, 0, -12)
     fg, _ = render(build, (-5.5, -8.5, 5.0), (0, -0.2, 0), fov=40)
     img = finish(fg, background(2))
-    save(caption(img, "FaceCommander", "boxy salvage gunship · brain under a glass dome · twin lasers · nukes"),
+    save(caption(img, "FaceCommander", "boxy salvage gunship · life-support tank · hoses · electronics · nukes"),
          "01_ship.png")
 
 
@@ -209,7 +209,7 @@ def shot_fighter():
         M.build_laser_bolt(lb, (0.2, -3.2, 0.05), color=(1.0, 0.25, 0.3), length=0.7)
     fg, _ = render(build, (1.5, -6.5, 7.5), (0, -0.1, 0), fov=40)
     img = finish(fg, background(4, tint=(0.4, 0.04, 0.05), tint2=(0.08, 0.05, 0.12)))
-    save(caption(img, "Catlien Raider", "biomech arrowhead · bone mandible guns · ember slit sensors · swept fins"),
+    save(caption(img, "Catlien Raider", "biomech arrowhead · bone mandible guns · ember slit sensors"),
          "03_catlien_fighter.png")
 
 
@@ -299,44 +299,57 @@ def shot_helmet():
         M.neon_edges(head, (0.3, 0.9, 1.0, 0.5), 1.0)
     fg, _ = render(build, (0, -10.5, 0.2), (0, 0, -0.25), fov=40)
     img = finish(fg, background(9, nebula=0.6))
-    save(caption(img, "AR Helmet (webcam overlay)", "life-support helmet · exposed brain under glass · tubes · status LEDs"),
+    save(caption(img, "AR Helmet (webcam overlay)", "exposed brain under glass · status LEDs · sunglasses · cigar"),
          "09_helmet.png")
 
 
-def helmet_layer(size, yaw=0.0, roll=0.0):
-    """Renders only the helmet with transparent background (for the webcam overlay)."""
+def helmet_layer(yaw=0.0, roll=0.0):
+    """Renders only the helmet with transparent background (for the webcam overlay).
+
+    Returns the cropped RGBA image plus the pixel positions of the eye midpoint and the mouth in it,
+    which is what the game does with MediaPipe's head pose: put the helmet's eyes onto the player's.
+    """
     def build(r):
         h = M.build_helmet(r)
         h.setHpr(yaw, 0, roll)
-    fg, _ = render(build, (0, -9.0, 0.0), (0, 0, -0.1), fov=30)
+        return {"eyes": base.render.getRelativePoint(h, Point3(0, -1.0, M.EYE_Z)),
+                "mouth": base.render.getRelativePoint(h, Point3(0, -1.0, M.MOUTH_Z))}
+    fg, anchors = render(build, (0, -9.0, 0.0), (0, 0, -0.1), fov=30)
     rgb = fg[..., :3]
     a = np.clip(fg[..., 3:4] + rgb.max(-1, keepdims=True) * 0.6, 0, 1)
     un = np.where(a > 1e-3, rgb / np.maximum(a, 1e-3), 0)
     im = Image.fromarray(np.uint8(np.clip(np.concatenate([un, a], -1), 0, 1) * 255), "RGBA")
-    bbox = im.getbbox()
-    return im.crop(bbox).resize(size, Image.LANCZOS) if size else im.crop(bbox)
+    x0, y0, x1, y1 = im.getbbox()
+    shift = lambda p: (p[0] - x0, p[1] - y0)
+    return im.crop((x0, y0, x1, y1)), shift(anchors["eyes"]), shift(anchors["mouth"])
 
 
 def webcam_panel(w, h, roll=0.0):
+    import cv2
     src = Image.open(os.path.join(HERE, "..", "prompts", "screenshots", "FacecCommander_Screenshot_Ingame.png")).convert("RGB")
     cam = src.crop((292, 672, 532, 806))  # webcam area of the 2D original
-    face_cx, face_eye_y, face_w = 412 - 292, 737 - 672, 38  # rough face geometry in that crop
+    eyes, mouth = (115.5, 65.0), (115.0, 81.0)  # positions of the old landmark dots in that crop
+    # remove the old coloured landmark dots
+    arr = np.asarray(cam).copy()
+    hsv = cv2.cvtColor(arr, cv2.COLOR_RGB2HSV)
+    mask = ((hsv[..., 1] > 140) & (hsv[..., 2] > 120)).astype(np.uint8) * 255
+    mask[:, :80] = 0
+    mask[:, 160:] = 0
+    mask = cv2.dilate(mask, np.ones((3, 3), np.uint8))
+    cam = Image.fromarray(cv2.inpaint(arr, mask, 3, cv2.INPAINT_TELEA))
     s = h / cam.height
     cam = cam.resize((int(cam.width * s), h), Image.LANCZOS).filter(ImageFilter.SMOOTH)
     # cyberpunk grade
     arr = np.asarray(cam, float) / 255
     lum = arr.mean(-1, keepdims=True)
     arr = np.clip(lum * np.array([0.55, 0.95, 1.0]) * 1.1 + arr * 0.25, 0, 1)
-    cam = Image.fromarray(np.uint8(arr * 255))
-    hw = int(face_w * s * 2.2)
-    helm = helmet_layer(None, roll=roll)
-    hh = int(helm.height * hw / helm.width)
-    helm = helm.resize((hw, hh), Image.LANCZOS)
-    # helmet head-band sits at the brow; brow is ~0.62 of the helmet height from its top in the render
-    hx = int(face_cx * s - hw / 2)
-    hy = int(face_eye_y * s - hh * 0.5)
-    cam = cam.convert("RGBA")
-    cam.alpha_composite(helm, (max(hx, 0), max(hy, 0)))
+    cam = Image.fromarray(np.uint8(arr * 255)).convert("RGBA")
+    helm, h_eyes, h_mouth = helmet_layer(roll=roll)
+    k = (mouth[1] - eyes[1]) * s / (h_mouth[1] - h_eyes[1])
+    helm = helm.resize((int(helm.width * k), int(helm.height * k)), Image.LANCZOS)
+    layer = Image.new("RGBA", cam.size, (0, 0, 0, 0))
+    layer.paste(helm, (int(eyes[0] * s - h_eyes[0] * k), int(eyes[1] * s - h_eyes[1] * k)), helm)
+    cam = Image.alpha_composite(cam, layer)
     panel = Image.new("RGB", (w, h), (10, 12, 18))
     panel.paste(cam.convert("RGB"), ((w - cam.width) // 2, 0))
     return panel, (w - cam.width) // 2, cam.width

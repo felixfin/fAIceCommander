@@ -84,7 +84,7 @@ svg text { font-family: var(--f-mono); }
 
 <div class="wrap">
 <header>
-  <div class="eyebrow">Concept · revision 2 · 2 November 2026 · before implementation</div>
+  <div class="eyebrow">Concept · revision 3 (final) · 2 November 2026 · ready for implementation</div>
   <h1>f<span class="ai">AI</span>ceCommander<span class="d3">3D</span></h1>
   <p class="lede">The face-gesture space shooter, rebuilt as a Python desktop game: real-time 3D in a grim retro low-poly style, seven levels to the Catlien mothership, adaptive drum &amp; bass, and a life-support helmet with an exposed brain laid over your webcam image.</p>
   <figure>
@@ -92,14 +92,16 @@ svg text { font-family: var(--f-mono); }
     <figcaption>In-game mockup, level 1. The 3D scene is real Panda3D output of the procedural models; HUD and webcam panel were composited for the mockup (webcam crop taken from your old screenshot).</figcaption>
   </figure>
   <div class="changes col">
-    <strong>Changed in this revision</strong>
+    <strong>Changed in revision 3</strong>
     <ul>
-      <li>Everything in English: game texts, voice, code and documentation.</li>
-      <li>The ship is now a boxy salvage gunship modelled on the 2D sprite, not a jet.</li>
-      <li>Catliens redesigned: dark, biomechanical warships with only a hint of a cat. The whole look is a notch creepier.</li>
-      <li>Standard laser fires one pulse per mouth opening.</li>
-      <li>Your answers are built in: constant thrust, Easy/Hard modes, outro plus endless mode, gory brain bursts, fullscreen.</li>
-      <li>One source file per level.</li>
+      <li>The ship has more detail: coolant hoses, a glowing life-support tank wired into the brain dome, an electronics rack with an LED matrix, radiator fins, cable bundles, a radar dish and antennas.</li>
+      <li>Catliens are less cat-like: no more ear-like fins or spires. The only hint left is the slanted slit sensors, and on the mothership the slit-pupil eye.</li>
+      <li>The webcam helmet now puts sunglasses over your eyes and a glowing cigar in the corner of your mouth.</li>
+      <li>All remaining questions are settled (see the end of the page).</li>
+    </ul>
+    <strong>Revision 2</strong>
+    <ul>
+      <li>Everything in English, a boxy ship modelled on the 2D sprite, darker Catliens, one laser pulse per mouth opening, Easy/Hard modes, outro plus endless mode, gory brain bursts, fullscreen, one source file per level.</li>
     </ul>
   </div>
 </header>
@@ -171,16 +173,16 @@ svg text { font-family: var(--f-mono); }
   <h2>Models and effects</h2>
   <div class="col"><p>Low-poly with hard flat shading, bloom and faint scanlines: retro but clean, a notch grim. Everything is generated in code. Human tech is patched-together, rusty orange salvage. Catliens are near-black biomech hulls with dried-blood plates, bone struts and ember-red slit sensors.</p></div>
   <div class="grid2">
-    <figure><img src="img/01_ship.webp" alt="The boxy orange FaceCommander ship with glass dome and brain, side pods, swept fins and yellow exhaust flames" width="1280" height="720" loading="lazy"><figcaption>FaceCommander. A beveled brick of a hull with a stepped prow, side pods and swept fins after the 2D sprite, three square exhausts with yellow flames. James' brain sits under the dome.</figcaption></figure>
-    <figure><img src="img/03_catlien_fighter.webp" alt="Catlien raider: black arrowhead hull with dark red swept wings, bone mandible guns and glowing ember slit sensors" width="1280" height="720" loading="lazy"><figcaption>Catlien raider (level 5). An abstract arrowhead warship. The cat is only hinted at: two small swept fins and slanted slit sensors. It fires from bone mandibles.</figcaption></figure>
-    <figure><img src="img/04_mothership.webp" alt="Catlien mothership: black crescent hull with forward claws, bone ribs, spikes and a red slit-pupil eye in the center" width="1280" height="720" loading="lazy"><figcaption>Mothership (level 7). A black crescent with forward claws and bone ribs. At the centre is the throne chamber, a slit-pupil eye that stares back.</figcaption></figure>
+    <figure><img src="img/01_ship.webp" alt="The boxy orange FaceCommander ship with glass dome and brain, side pods, swept fins and yellow exhaust flames" width="1280" height="720" loading="lazy"><figcaption>FaceCommander. A beveled brick of a hull with a stepped prow, side pods and swept fins after the 2D sprite, three square exhausts with yellow flames. James' brain sits under the dome, fed by a green life-support tank. Hoses, an LED electronics rack, radiator fins, a radar dish and a nuke rack cover the hull.</figcaption></figure>
+    <figure><img src="img/03_catlien_fighter.webp" alt="Catlien raider: black arrowhead hull with dark red swept wings, bone mandible guns and glowing ember slit sensors" width="1280" height="720" loading="lazy"><figcaption>Catlien raider (level 5). An abstract arrowhead warship with bone ribs, a tail spine and claw-tipped wings. Only the slanted slit sensors hint at a cat. It fires from bone mandibles.</figcaption></figure>
+    <figure><img src="img/04_mothership.webp" alt="Catlien mothership: black crescent hull with forward claws, bone ribs, spikes and a red slit-pupil eye in the center" width="1280" height="720" loading="lazy"><figcaption>Mothership (level 7). A black crescent with forward claws, bone ribs, rear spikes and a glowing dorsal spine. At the centre is the throne chamber, a slit-pupil eye that stares back.</figcaption></figure>
     <figure><img src="img/05_mothership_zones.webp" alt="Top view of the mothership with five damage zones marked" width="1280" height="720" loading="lazy"><figcaption>Damage zones as specified: 30 / 15 / 10 / 15 / 30 % of the width. Zone 3 is the eye.</figcaption></figure>
     <figure><img src="img/02_asteroids.webp" alt="Asteroids of category 1 and 2" width="1280" height="720" loading="lazy"><figcaption>Asteroids. Category 2 shows glowing fracture lines where it splits into up to three category 1 rocks.</figcaption></figure>
     <figure><img src="img/07_black_hole.webp" alt="Black hole with accretion disk" width="1280" height="720" loading="lazy"><figcaption>Black hole (level 6, artificial in level 7). The closer you get, the deeper and more muffled the music becomes.</figcaption></figure>
     <figure><img src="img/06_boltzmann_brain.webp" alt="Boltzmann brain with neuron sparks" width="1280" height="720" loading="lazy"><figcaption>Boltzmann brain (level 4). Forms out of nothing in a shower of sparks and decays after 1–3 s.</figcaption></figure>
     <figure><img src="img/12_brain_burst.webp" alt="Three stages: intact brain, brain bursting into chunks and blood, blood and brain matter splattered on the screen" width="1280" height="720" loading="lazy"><figcaption>Brain burst. A shot brain bursts into chunks and blood, and some of it splatters on the screen glass. It drips and fades after about 3 s.</figcaption></figure>
     <figure><img src="img/08_explosion.webp" alt="Explosion in three stages" width="1280" height="720" loading="lazy"><figcaption>Explosion in three stages. The bang plays only when the shockwave ring reaches your ship.</figcaption></figure>
-    <figure><img src="img/09_helmet.webp" alt="AR helmet with brain under a glass dome, LED head band, tubes and collar, on a holographic head" width="1280" height="720" loading="lazy"><figcaption>The AR helmet from the story: brain under glass, head band with status LEDs, tubes to the ear pods, collar.</figcaption></figure>
+    <figure><img src="img/09_helmet.webp" alt="AR helmet with brain under a glass dome, LED head band, tubes and collar, on a holographic head" width="1280" height="720" loading="lazy"><figcaption>The AR helmet from the story: brain under glass, head band with status LEDs, tubes to the ear pods, collar. Sunglasses over the eyes and a smoking cigar in the corner of the mouth.</figcaption></figure>
   </div>
   <h3>Level 4 mockup</h3>
   <figure><img class="hero-img" src="img/13_ingame_level4.webp" alt="In-game mockup of level 4: pitch-black void, floating brains, one bursting, blood and brain matter splattered across the right side of the screen" width="1280" height="970" loading="lazy"><figcaption>The void: no stars, only brains. Shooting one close by smears your view for a few seconds, so it is a risk as well as a reward.</figcaption></figure>
@@ -194,7 +196,7 @@ svg text { font-family: var(--f-mono); }
   <h2>AR helmet instead of coloured dots</h2>
   <div class="col">
     <p>The helmet is a 3D model. MediaPipe delivers the head's transformation matrix for every webcam frame, and Panda3D renders the helmet in exactly that pose over the mirrored camera image. When you tilt or turn your head, the helmet moves with it.</p>
-    <p>The face stays uncovered, so you recognise yourself and can see the mouth and eye detection working. The status LEDs on the head band show live what is detected: mouth open, eyes closed, weapon switch.</p>
+    <p>Instead of coloured dots, the landmarks anchor two props: <strong>sunglasses</strong> sit on your eyes and a <strong>cigar</strong> hangs in the corner of your mouth. Both follow your head pose. When you open your mouth to fire, the cigar drops with your jaw and its tip flares; when you close your eyes, the lenses fade from black to a faint violet glow so you can see that the hypno protection is active. The status LEDs on the head band also show what is detected: mouth open, eyes closed, weapon switch.</p>
     <p>The game runs <strong>fullscreen</strong> by default. The 16:9 play area sits on top and the webcam panel below it, as in the original, next to the control gauges and the current track. F11 switches to windowed mode, and the webcam panel can be hidden.</p>
   </div>
 </section>
@@ -312,16 +314,17 @@ svg text { font-family: var(--f-mono); }
 </section>
 
 <section>
-  <div class="eyebrow">Last open points</div>
-  <h2>Remaining questions</h2>
-  <div class="col"><p>Each one has my proposal. "OK" is enough if it fits.</p></div>
+  <div class="eyebrow">Settled</div>
+  <h2>Final decisions</h2>
   <ol class="q col">
-    <li>Should thrust stop only for the mothership, or also in level 5 with the raiders?<span class="def">Proposal: <b>only for the mothership</b>. In level 5 the starfield keeps scrolling and the raiders hold position on screen.</span></li>
-    <li>Should Easy differ only in the restart, or also be a bit more forgiving?<span class="def">Proposal: <b>restart only</b>; the difficulty stays identical.</span></li>
-    <li>Do the outro idea and endless mode work for you?<span class="def">Proposal: <b>as described above</b>.</span></li>
-    <li>Should brain splatter briefly obscure your view, as a risk when shooting brains up close?<span class="def">Proposal: <b>yes</b>, about 3 s, only when the brain bursts close to the ship.</span></li>
-    <li>Voice for narrator and AI scientists?<span class="def">Proposal: <b>Piper TTS</b>, a deep male narrator voice plus a filtered, synthetic-sounding voice for the scientists.</span></li>
+    <li>Thrust stops only for the mothership.<span class="def">In level 5 the starfield keeps scrolling and the raiders hold position on screen.</span></li>
+    <li>Easy and Hard differ only in the restart point.<span class="def">The difficulty stays identical.</span></li>
+    <li>The outro and endless mode stay as described above.</li>
+    <li>Brain splatter obscures the view for about 3 s.<span class="def">This only happens when a brain bursts close to the ship.</span></li>
+    <li>Voices come from Piper TTS.<span class="def">A deep male narrator plus a filtered, synthetic-sounding voice for the AI scientists.</span></li>
+    <li>The helmet overlay uses sunglasses and a cigar instead of landmark dots.</li>
   </ol>
+  <div class="col"><p><strong>Next:</strong> milestone 1, with face controls and calibration, level 1 playable, HUD, webcam panel with helmet, and fullscreen.</p></div>
 </section>
 </div>
 
