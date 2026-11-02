@@ -8,5 +8,6 @@ class AsteroidBelt(Level):
 
     def spawn(self, dt):
         d = self.data
-        while len(self.world.asteroids) < d["asteroid_count"]:
-            self.world.spawn_asteroid(d["asteroid_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"])
+        while self.world.count(1) < d["asteroid_count"]:
+            self.world.spawn_asteroid(1, d["asteroid_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"],
+                                      d["damage_percent"], d["score_per_kill"])

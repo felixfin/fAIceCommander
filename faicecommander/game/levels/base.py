@@ -9,13 +9,14 @@ class Level:
     key = ""
     unlocked = ("laser", "shield")
     nukes = 0
+    banner = "Reach the next star"
 
     def __init__(self, world, data):
         self.world = world
         self.data = data
         self.name = data["name"]
+        self.music = data.get("music", "neural_breaks")
         self.duration = data.get("duration_s", 90)
-        self.damage = data.get("damage_percent", 25)
         self.elapsed = 0.0
 
     @property
@@ -38,11 +39,11 @@ class Level:
         self.elapsed += dt
         self.world.score += self.data.get("score_per_second", 0) * dt
         self.spawn(dt)
-        self.world.update(dt, ctl, self.damage)
+        self.world.update(dt, ctl)
         events = self.world.pop_events()
-        for kind, payload in events:
-            if kind == "kill":
-                self.world.score += self.data.get("score_per_kill", 100)
+        for ev in events:
+            if ev[0] == "kill":
+                self.world.score += ev[1].score
         return events
 
     def spawn(self, dt):

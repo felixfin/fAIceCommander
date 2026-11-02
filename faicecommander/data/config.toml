@@ -42,7 +42,35 @@ shield_damage_factor = 0.4   # shield reduces collision damage by 60 %
 energy_cost = 4.0            # percent per pulse
 speed_px = 900
 min_interval_s = 0.12
-damage = 1
 
 [weapons.shield]
 energy_per_s = 10.0
+
+[weapons.beam]
+energy_per_s = 15.0
+
+[weapons.nuke]
+energy_cost = 30.0
+speed_px = 300              # launch speed, then accelerates
+accel_px = 1400
+blast_radius_px = 90
+fuse_s = 2.0
+
+# What it takes to destroy a target: laser hits / beam seconds / nukes (design spec)
+[targets.asteroid_1]
+laser = 1
+beam = 0.5
+nuke = 1
+
+[targets.asteroid_2]
+laser = 2
+beam = 2.0
+nuke = 1
+
+[effects]
+shockwave_speed_px = 260    # the explosion is heard when this ring reaches the ship
+
+[audio]
+master = 0.9
+music = 0.7
+sfx = 0.85

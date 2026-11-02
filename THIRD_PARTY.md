@@ -7,6 +7,7 @@
 | `face_landmarker.task` model (`faicecommander/assets/`) | MediaPipe FaceLandmarker model | Apache 2.0 |
 | [OpenCV](https://opencv.org/) (`opencv-contrib-python`) | webcam capture | Apache 2.0 |
 | [NumPy](https://numpy.org/) | math | BSD-3-Clause |
+| [SciPy](https://scipy.org/) | filters for the audio synthesis, WAV writing | BSD-3-Clause |
 | [Chakra Petch](https://github.com/m4rc1e/Chakra-Petch) font (`faicecommander/assets/fonts/`) | HUD font | SIL Open Font License 1.1 (see `OFL.txt`) |
 
 The Panda3D wheels bundle OpenAL Soft and the OpenCV wheels bundle FFmpeg. Both are LGPL and

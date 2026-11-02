@@ -22,6 +22,9 @@ class Config:
             node = node[key]
         return Config(node) if isinstance(node, dict) else node
 
+    def dict(self):
+        return dict(self._data)
+
     def get(self, dotted, default=None):
         try:
             return self[dotted]

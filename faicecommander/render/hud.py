@@ -110,7 +110,9 @@ class Hud:
         OnscreenText("SYSTEM", parent=self.panel_right, pos=(-0.06, 0.0), scale=0.042, fg=PINK, align=TextNode.ARight, **t)
         self.status = OnscreenText("", parent=self.panel_right, pos=(-0.06, -0.08), scale=0.036,
                                    fg=(0.85, 0.9, 1, 1), align=TextNode.ARight, **t)
-        self.keys = OnscreenText("F2 panel  ·  F11 fullscreen  ·  P pause  ·  Esc quit", parent=self.panel_right,
+        self.track = OnscreenText("", parent=self.panel_right, pos=(-0.06, -0.2), scale=0.036,
+                                  fg=(0.55, 0.85, 1, 1), align=TextNode.ARight, **t)
+        self.keys = OnscreenText("F2 panel  ·  F11 fullscreen  ·  M mute  ·  P pause  ·  Esc quit", parent=self.panel_right,
                                  pos=(-0.06, -0.3), scale=0.03, fg=GREY, align=TextNode.ARight, **t)
         self.cam_note = OnscreenText("", parent=self.panel, pos=(0, 0), scale=0.04, fg=GREY, **t)
         self.set_weapons(["laser", "shield"], "laser", nukes=0)
@@ -161,6 +163,15 @@ class Hud:
 
     def set_status(self, text):
         self.status.setText(text)
+
+    def set_track(self, title, build_progress, muted):
+        if muted:
+            text = "SOUND MUTED (M)"
+        elif build_progress < 1.0 and not title:
+            text = f"synthesizing soundtrack · {build_progress * 100:.0f} %"
+        else:
+            text = f"SOUNDTRACK · {title}" if title else ""
+        self.track.setText(text)
 
     def show_game_hud(self, visible):
         for node in (self.top, self.hull.node, self.energy.node, self.score, self.level):

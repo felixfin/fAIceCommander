@@ -12,6 +12,7 @@ def main():
                         help="let the game play itself (smoke test)")
     parser.add_argument("--screenshot", metavar="PATH", help="with --autopilot: save a screenshot, then quit")
     parser.add_argument("--offscreen", action="store_true", help="render without a visible window (tests)")
+    parser.add_argument("--level", type=int, default=1, help="start at this level (practice; development)")
     args = parser.parse_args()
 
     from .config import Config
@@ -24,7 +25,7 @@ win-size {w} {h}
 framebuffer-multisample 1
 multisamples 4
 sync-video 1
-audio-library-name null
+audio-preload-threshold 60000000
 {"window-type offscreen" if args.offscreen else ""}
 """)
     from .core.app import App

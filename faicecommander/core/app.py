@@ -1,5 +1,6 @@
 """Application shell: window and display regions, lights, input sources, state machine."""
 import math
+import random
 import time
 
 from direct.showbase.ShowBase import ShowBase
@@ -7,6 +8,7 @@ from panda3d.core import (
     AmbientLight, AntialiasAttrib, DirectionalLight, Filename, Material, Point2, Point3, WindowProperties,
 )
 
+from ..audio import AudioSystem
 from ..game.levels import LEVELS
 from ..game.world import World
 from ..input.face_tracker import FaceTracker
@@ -41,13 +43,19 @@ class App(ShowBase):
         self.flash = ScreenFlash(self.render2d)
         self.backdrop = Backdrop(self.render, self.camera, seed=3)
         self.world = World(self, cfg)
-        self.level_index = 0
+        self.audio = AudioSystem(self, cfg)
+        self.level_count = len(LEVELS)
+        self.level_index = max(0, min(self.level_count - 1, getattr(args, "level", 1) - 1))
+        self.level_start_score = 0.0
+        self.shake_amount = 0.0
+        self.cam_base = self.camera.getPos()
         self.autopilot = Autopilot() if args.autopilot else None
         self.accept("f2", self.toggle_panel)
         self.accept("f11", self.toggle_fullscreen)
         self.accept("escape", self.userExit)
         self.accept("p", self._flag, ["_pause"])
         self.accept("enter", self._flag, ["_skip"])
+        self.accept("m", self.audio.toggle_mute)
         self.accept("window-event", self.on_window_event)
         if cfg["display.fullscreen"] and not args.windowed and not args.offscreen:
             self.toggle_fullscreen(force=True)
@@ -159,11 +167,21 @@ class App(ShowBase):
 
     def make_level(self):
         cls = LEVELS[self.level_index]
+        self.level_start_score = self.world.score
         return cls(self.world, self.levels_cfg[cls.key])
 
     def restart_level(self):
-        """Easy mode: retry the current level (Hard mode arrives with the level select)."""
-        self.world.score = 0.0
+        """Easy mode: retry the current level with the score it started with."""
+        self.world.score = self.level_start_score
+
+    def next_level(self):
+        self.level_index += 1
+        if self.level_index >= self.level_count:  # end of the content so far: start over
+            self.level_index = 0
+            self.world.score = 0.0
+
+    def shake(self, amount):
+        self.shake_amount = max(self.shake_amount, amount)
 
     def _flag(self, name):
         setattr(self, name, True)
@@ -200,7 +218,12 @@ class App(ShowBase):
         else:
             why = self.tracker.error or "disabled"
             self.hud.set_status(f"KEYBOARD MODE ({why})\nA/D steer · SPACE mouth · Q/E weapon · C eyes")
+        self.hud.set_track(self.audio.music.title, self.audio.builder.progress, self.audio.muted)
         self.flash.update(dt)
+        self.audio.update(dt)
+        self.shake_amount = max(0.0, self.shake_amount - dt * 2.5)
+        s = self.shake_amount ** 2 * 0.35
+        self.camera.setPos(self.cam_base + (random.uniform(-s, s), random.uniform(-s, s), random.uniform(-s, s)))
         moving = self.state.scrolling and not getattr(self.state, "halted", False)
         self.backdrop.update(dt, self.world.scroll if moving else self.world.scroll * 0.15)
         if self.args.screenshot and time.monotonic() - self._t0 > self.args.autopilot:
@@ -230,6 +253,8 @@ class Autopilot:
             steer = max(-1.0, min(1.0, (a.x - ship.x) * 0.8))
         was = self.mouth
         self.mouth = (self.t % 0.5) < 0.25
-        ctl = Controls(steer=steer, mouth_open=self.mouth, mouth_pressed=self.mouth and not was, tracked=True)
+        step = 1 if int(self.t / 3) != int((self.t - dt) / 3) else 0  # cycle through the weapons
+        ctl = Controls(steer=steer, mouth_open=self.mouth, mouth_pressed=self.mouth and not was, weapon_step=step,
+                       tracked=True)
         ctl.tilt_gauge, ctl.mouth_gauge = steer, float(self.mouth)
         return ctl

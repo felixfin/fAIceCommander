@@ -2,9 +2,9 @@
 Panda3D==1.10.16           # BSD-3
 mediapipe==1.2.0           # Apache 2.0 (pulls in opencv-contrib-python, Apache 2.0)
 numpy>=2.0                 # BSD
+scipy>=1.13                # BSD - procedural music and sound effects
 
-# Concept renders / audio synthesis (concept/)
-scipy>=1.13                # BSD
+# Concept renders (concept/)
 pillow>=10                 # MIT-CMU
 
 # Development

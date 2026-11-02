@@ -37,6 +37,10 @@ class Ship:
         dx, dy = 0.98 * self.scale, 1.65 * self.scale
         return [(self.x - dx, self.y + dy), (self.x + dx, self.y + dy)]
 
+    @property
+    def prow_y(self):
+        return self.y + 2.25 * self.scale
+
     def update(self, dt, steer, half_width):
         self.t += dt
         self.hit_cooldown = max(0.0, self.hit_cooldown - dt)
