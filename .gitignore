@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 *.pyc
+tools/voice/.pipervenv/
+tools/voice/models/
+tools/voice/raw/

@@ -76,7 +76,10 @@ concept/       concept renders and the music teaser (see concept/web/index.html)
 
 Highscores and the endless unlock are stored in `%LOCALAPPDATA%\fAIceCommander3D\save.json`.
 
-## Voice-over (optional)
+## Voice-over
 
-Intro and outro show their lines as captions. To add a voice, put `<id>.wav` files into
-`faicecommander/assets/voice/` - the ids and texts are listed in `LINES.txt` there.
+Intro and outro are narrated; the lines are also shown as captions. The voices were generated
+offline with Piper TTS and post-processed (EQ, compression, radio/robot effects, reverb) - see
+`tools/voice/`. Piper is a development tool only and is not part of the game. To replace a line,
+put your own `<id>.wav` into `faicecommander/assets/voice/` (ids and texts in `LINES.txt`).
+Missing files are skipped; the volume is `audio.voice` in `config.toml`.

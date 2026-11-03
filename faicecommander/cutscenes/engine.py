@@ -4,12 +4,13 @@ Voice-over is optional: if faicecommander/assets/voice/<line id>.wav exists it i
 (see assets/voice/LINES.txt for the ids and texts); otherwise the line is shown as a typed caption.
 """
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import Filename, TextNode
+from panda3d.core import AudioSound, Filename, TextNode
 
 from ..config import ASSETS_DIR
 
 VOICE_DIR = ASSETS_DIR / "voice"
 TYPE_RATE = 38.0  # characters per second
+VOICE_DUCK = 0.45  # music level while someone speaks
 
 
 class Line:
@@ -42,6 +43,8 @@ class Cutscene:
                                     font=font, mayChange=True, wordwrap=40, shadow=(0, 0, 0, 1))
         self.voices = {}
         self.played = set()
+        cfg = app.cfg
+        self.voice_volume = cfg["audio.master"] * cfg.get("audio.voice", 1.0)
 
     @property
     def total(self):
@@ -54,12 +57,19 @@ class Cutscene:
         app.hud.show_game_hud(False)
         app.hud.message()
         app.audio.music.play(self.music, self.layers)
+        for shot in self.shots:  # load up front so the first line does not stutter
+            for line in shot.lines:
+                if line.id:
+                    self._voice(line.id)
 
     def _voice(self, line_id):
         if line_id not in self.voices:
             path = VOICE_DIR / f"{line_id}.wav"
-            self.voices[line_id] = (self.app.loader.loadSfx(Filename.fromOsSpecific(str(path)).getFullpath())
-                                    if path.exists() else None)
+            sound = None
+            if path.exists():
+                sound = self.app.loader.loadSfx(Filename.fromOsSpecific(str(path)).getFullpath())
+                sound.setVolume(self.voice_volume)
+            self.voices[line_id] = sound
         return self.voices[line_id]
 
     def update(self, dt):
@@ -81,6 +91,8 @@ class Cutscene:
         if shot.update:
             shot.update(local, dt, self.state, ctx)
         self._text(shot, local)
+        speaking = any(v is not None and v.status() == AudioSound.PLAYING for v in self.voices.values())
+        self.app.audio.music.set_duck(VOICE_DUCK if speaking else 1.0)
 
     def _enter(self, i):
         if self.root is not None:
@@ -131,6 +143,7 @@ class Cutscene:
         self.card.destroy()
         self.credits.destroy()
         app = self.app
+        app.audio.music.set_duck(1.0)
         app.camera.setPos(self.saved_cam[0])
         app.camera.setHpr(self.saved_cam[1])
         app.world.root.show()

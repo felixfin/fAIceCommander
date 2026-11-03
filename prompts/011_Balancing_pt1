@@ -1,0 +1,37 @@
+OK, bevor wir noch größere Anpassungen machen, gehen wir jetzt ans Balancing. Folgende Änderungen hätte ich gerne:
+
+- Die Level sind alle viel zu einfach. Kannst du vielleicht den aktuellen Modus als Level Easy machen? Als nächstes soll Level Medium hinzukommen (dieser soll per Default ausgewählt sein). Auch bei Medium wird jedes Level immer wieder neugestartet, wenn man stirbt. Level Hard ist noch etwas schwerer als Level Medium + man muss beim Tod ganz von vorne anfangen. Allerdings ist der Schwierigkeitsgrad deutlich höher (mehr Asteoriden, willkürlihcere Flugbahnen etc.)
+
+- Level 3 (Hypno): Es war auch sehr einfach. Ich würde vorschlagen, die Hypno-Zeit deutlich zu verkürzen, aber dafür die Anzahl der Asteoriden deutlich zu erhöhen. Die Idee ist, dass der Spieler sich die aktuell auf dem Bildschirm befindlichen Asteoriden merken muss und ihnen quasi aus dem Gedächtnis ausweichen muss. Aktuell schließt man einfach die Augen und wartet bis das Signal zum Öffnen der Augen wieder kommt. Die Wahrscheinlichkeit für Kollisionen mit Asteoriden ist aber so gering, dass man eigentlich kaum etwas tun muss. Der Hypnobeam sollte außerdem mehr nach einem Katzenschrei klingen.
+
+- Das Level 4 (Void mit den Blotzmanngehirnen) ist viel zu leicht. Selbst, wenn man nur gerade aus fliegt, verschwinden die meisten Gehirne wieder bevor sie das Raumschiff erreichen. Außerdem verursachen sie kaum Schaden bei einer Kollision. Ich würde die Gehirne daher etwas länger existieren lassen (am besten eine zufällige Zeitspanne zwischen der aktuellen und einer deutlich längeren). Außerdem Schaden bei Kollision etwas erhöhen und auch die Anzahl (am Anfang des Levels weniger Gehirne, je länger das Level läuft, um so mehr (natürlich nur bis zu einer vertretbaren Grenze, sodass man das Level überhaupt noch schaffen kann)). Auch für den Easy Mode sollen diese Änderungen erfolgen.
+
+- Level 5 (Catlien ships): Ich bin mir nicht sicher, ob das Level einfach nur sehr kurz war oder ob die Nukes ausgereicht haben, beide Schiffe zu zerstören. Vielleicht noch etwas schwieriger machen. Außerdem sollte es jedes Mal, wenn ein Catlien schießt, ein Katzengeräusch (Miau), aber wie von einer aggressiven Katze, geben. Auch die Catliens sollten unterschiedliche Waffen besitzen. Unter anderem sollten sie zusätzlich zum normalen Laser auch Mäuse werfen können und sich für wenige Sekunden auf den Bauch drehen können, was das eigene Raumschiff "magisch" in die Richtung dieses Catliens zieht. Vielleicht sollten die Schiffe etwas kleiner sein, damit sie nicht einen so großen Teil des Bildschirms ausfüllen.
+
+- Level 6 (Black Holes): An sich cool, vor allem der Effekt, der die Musik verzerrt! Aber ich finde es noch viel zu einfach. Wenn man nicht direkt in ein schwarzes loch fliegt, passiert einem quasi nichts. Die Anziehungskraft sollte deutlich stärker sein. Außerdem fände ich es cooler, wenn die Größe der Schwarzen löcher schankt. Je größer das schwarze Loch, desto stärker die Anziehung. Eventuell auch die Anzahl an Asteoriden etwas erhöhen.
+
+- Level 7 (Mutterschiff): Du hast recht, das Level ist vieeeel zu einfach. Auch das Mutterschiff sollte irgendwie Katzengeräusche machen. Auf jeden Fall muss es viel mehr aushalten und deutlich dynamischer sein.
+
+Sonstige Verbesserungsvorschläge:
+- Intro: 
+-- Die Idee, den Helm in das Raumschiff einzusetzen ist genial. Aber leider besitzt das Raumschiff im Intro bereits von anfang an ein Gehirn in der Kabine. Es sollte eine Spezialversion des Raumschiffs gerendert werden, bei der noch kein Gehirn eingesetzt ist. Dort soll dasnn der Helm mit Webcam und Gehirn eingefügt werden. Erst ganz am Ende sieht das Raumschiff so aus, wie später während des Spiels.
+-- Vielleicht noch deutlich dramatischere Musik
+-- Die Grafiken sollten qualitativ höchwertiger und viel detailreicher werden. Geize nicht an Tokens, das Intro soll einen richtig tollen Eindruck machen und richtig spookey sein.
+-- Viel mehr krasse visuelle und Audioeffekte
+-- Stimmen: Sehr gut: Aber es gibt noch ein paar Sprachfehler (z. B. P.E.Ts statt pets, auch der Name Nathaniel war nicht verständlich). Kannst du die Stimme des Sprechers noch etwas düsterer machen? Zur Not auch mit einem Stimmfilter / Audioeffekt.
+
+Outro:
+- Bitte viel krassere visuelle Effekte: Feuerwerke, heftige Party-Musik etc.
+- Statt "My name is James Nathaniel Honor": "My name is Honor - James Nathaniel Honor".
+
+- Generell die Grafik: 
+-- Kannst du die Grafik insgesamt etwas verbessern? Vom Stil her schon so ähnlich wie jetzt, aber vielleicht etwas fotorealistischer? Mehr Details, mehr Kontraste, mehr Variationen der Formen? Aber ohne, dass es kitschig wird.
+-- Kannst du das Raumschiff etwas weniger spitz machen? Ich finde, es sieht immer noch zu sehr wie ein Düsenjet aus.
+
+- Webcam: 
+-- Kannst du auch den Hintergrund des Webcambildes überblenden? Am besten mit einer Umgebung, die wie ein Cockpit von einem dysteren Raumschiff aussieht. Lass dir was einfallen.
+-- Kannst du die Sonnenbrille etwas größer und weniger Comicstyle artig machen? Eher wie die Brille eines Space Marine, aber schon noch wie eine Sonnenbrille. Ansonsten erstmal perfekt.
+
+Kann man beim ersten Starten des Spiels noch eine Art Ladebildschirm / Ladebalken hinzufügen?
+
+Außerdem ein Icon für das Ladefenster.

@@ -1,5 +1,6 @@
-Optional voice-over. Put a WAV file named <id>.wav (mono or stereo, any sample rate) into this folder
-and the cutscene plays it together with the caption. Missing files are simply skipped.
+Voice-over lines. Each <id>.wav in this folder (mono or stereo, any sample rate) is played together
+with its caption; missing files are simply skipped. The shipped files are generated with
+tools/voice/ - replace any of them with your own recording to change a line.
 
 intro_01: For centuries, humanity has been at war with the Catliens.
 intro_02: Feline. Brilliant. Merciless. Their swarms have burned world after world.
