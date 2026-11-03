@@ -82,8 +82,8 @@ def stretch(x, factor, win=1024, hop=256, tol=256):
 def pitch_down(x, semitones):
     """Lower pitch and formants together (a bigger, darker throat), keeping the duration."""
     r = 2 ** (semitones / 12)
-    y = stretch(x, r)
-    y = resample_poly(y, 1000, int(round(1000 * r)))[: len(x)]
+    y = stretch(x, 1 / r)                                   # shorter, same pitch ...
+    y = resample_poly(y, int(round(1000 * r)), 1000)[: len(x)]  # ... then played slower: lower pitch, same length
     return np.pad(y, (0, len(x) - len(y)))
 
 
@@ -98,9 +98,9 @@ def mask(x, delay_ms=2.2, gain=0.3):
 
 
 def narrator(x, space=0.16, size=1.3):
-    """Deep and dark (a hint of Batman and Vader): pitched down 5 semitones, a quiet sub-octave growl,
-    rasp, a faint mask resonance, heavy low end and dark highs, compression, dark hall."""
-    deep = pitch_down(x, 5.0)
+    """Very deep and dark, Vader-like: pitched down 7 semitones, a quiet sub-octave growl, rasp, a mask
+    resonance, heavy low end and dark highs, compression, dark hall."""
+    deep = pitch_down(x, 7.0)
     growl = pitch_down(x, 12.0)                     # an octave below: the gravel under the voice
     x = deep + 0.16 * saturate(lp(growl, 700), 2.5)
     x = x + 0.12 * saturate(bp(x, 150, 1200), 4.0)  # rasp
