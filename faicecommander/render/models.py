@@ -21,7 +21,8 @@ def _source_hash():
     """Changes whenever the model code changes, so stale cached models are never used."""
     pkg = Path(__file__).resolve().parents[1]
     h = hashlib.md5()
-    for p in sorted(list((pkg / "render").glob("*.py")) + list((pkg / "game" / "entities").glob("*.py"))):
+    files = [p for d in ("render", "game/entities", "cutscenes") for p in (pkg / d).glob("*.py")]
+    for p in sorted(files):
         h.update(p.read_bytes())
     return h.hexdigest()[:12]
 
@@ -33,15 +34,22 @@ def _cache_dir():
     return d
 
 
+_LOADED = {}
+
+
 def cached(name, build):
-    """A model tree built by build(root) - loaded from the per-user cache (.bam) when it is there.
-    Building the procedural models takes seconds; loading them takes milliseconds."""
+    """A model tree built by build(root) - loaded from the per-user cache (.bam) when it is there, and
+    kept in memory after that. Building the procedural models takes seconds; loading them milliseconds.
+    The result is a template: callers copy it (copyTo) and never change it."""
+    if name in _LOADED:
+        return _LOADED[name]
     path = _cache_dir() / f"{name}.bam"
     if path.exists():
         node = Loader.getGlobalPtr().loadSync(Filename.fromOsSpecific(str(path)), LoaderOptions(LoaderOptions.LF_no_cache))
         if node is not None:
             root = NodePath(node)
             root.setName(name)
+            _LOADED[name] = root
             return root
     root = NodePath(name)
     build(root)
@@ -51,6 +59,7 @@ def cached(name, build):
             tmp.replace(path)
         except OSError:  # another instance was faster
             tmp.unlink(missing_ok=True)
+    _LOADED[name] = root
     return root
 
 
@@ -732,52 +741,170 @@ def hull_paint(z0, z1):
     return f
 
 
+def _fur(base, dark, stripes=True, seed=0):
+    """Vertex colour for fur: soft noise, darker towards the back, tabby stripes and the forehead 'M'."""
+    base, dark = np.array(base), np.array(dark)
+
+    def f(p):
+        x, y, z = p
+        c = base * (1 + 0.18 * _noise(p, 9.0) + 0.08 * _noise(p, 23.0))
+        if stripes:
+            band = math.sin(z * 26 + 3 * math.sin(x * 9 + seed)) * math.cos(x * 4)
+            c = c * (1 - 0.6 * max(0.0, band - 0.2) / 0.8)
+        c = c * (1 - 0.25 * max(0.0, y) / 0.6)
+        return tuple(np.clip(c * 0.6 + dark * 0.4 * (1 - min(1.0, max(0.0, -y + 0.2))), 0, 1))
+    return f
+
+
 def build_catlien(parent, scale=1.0, queen=False):
-    """A Catlien seen through a canopy: gaunt elongated skull, heavy brow, fangs, glowing slit eyes. Faces -Y."""
+    """A Catlien: a big, realistic cat head and shoulders (armour collar, whisker pads, tall tufted ears,
+    almond eyes with slit pupils, whiskers, tabby fur). The queen is black with red eyes. Faces -Y."""
     root = parent.attachNewNode("catlien")
     matte = Material("fur")
-    matte.setSpecular((0, 0, 0, 1))
-    root.setMaterial(matte, 1)  # matte fur: reads as a silhouette, no plastic shine
-    fur = paint((0.015, 0.012, 0.012), (0.11, 0.085, 0.08), 0.6, 1.5, grime=0.35)
+    matte.setSpecular((0.05, 0.05, 0.05, 1))
+    matte.setShininess(5)
+    root.setMaterial(matte, 1)
+    if queen:
+        fur = _fur((0.07, 0.065, 0.07), (0.02, 0.02, 0.025), stripes=False)
+        eye_col, iris = (1.0, 0.12, 0.04), (1.0, 0.25, 0.05)
+    else:
+        fur = _fur((0.42, 0.34, 0.26), (0.12, 0.09, 0.07), seed=1)
+        eye_col, iris = (1.0, 0.75, 0.1), (0.85, 0.65, 0.1)
+    light_fur = _fur((0.62, 0.56, 0.48) if not queen else (0.12, 0.11, 0.12), (0.3, 0.27, 0.24), stripes=False)
     V, F = icosphere(3)
     head = root.attachNewNode("head")
     head.setPos(0, 0, 1.05)
-    head.setP(-12)  # head lowered: it stares up at you
-    part(head, V * np.array([0.34, 0.52, 0.36]), F, (1, 1, 1), pos=(0, 0.08, 0), vcol=fur)  # long skull
-    for sgn in (1, -1):  # gaunt cheekbones
-        part(head, V * np.array([0.1, 0.2, 0.08]), F, (1, 1, 1), pos=(sgn * 0.2, -0.22, -0.1), vcol=fur)
-    part(head, V * np.array([0.2, 0.3, 0.15]), F, (1, 1, 1), pos=(0, -0.42, -0.14), vcol=fur)  # narrow snout
-    part(head, V * np.array([0.06, 0.05, 0.04]), F, (0.02, 0.02, 0.02), pos=(0, -0.71, -0.08))  # nose
-    eye_col = (1.0, 0.12, 0.04) if queen else (1.0, 0.5, 0.04)
+    head.setP(-6)
+    part(head, V * np.array([0.37, 0.36, 0.33]), F, (1, 1, 1), pos=(0, 0.02, 0.02), vcol=fur)       # cranium
     for sgn in (1, -1):
-        Vp, Fp = pyramid([(sgn * 0.08, 0.1), (sgn * 0.34, 0.12), (sgn * 0.22, 0.32)], (sgn * 0.3, 0.42, 0.62))
-        part(head, Vp, Fp, (0.06, 0.045, 0.045), pos=(0, 0, 0.18), smooth=None)  # swept-back ears
-        lens = [(-0.13, -0.01), (-0.02, 0.05), (0.13, 0.03), (0.03, -0.045)]
+        part(head, V * np.array([0.17, 0.16, 0.15]), F, (1, 1, 1), pos=(sgn * 0.24, -0.06, -0.1), vcol=fur)  # cheek ruffs
+        part(head, V * np.array([0.085, 0.075, 0.07]), F, (1, 1, 1), pos=(sgn * 0.065, -0.33, -0.14),
+             vcol=light_fur)                                                                            # whisker pads
+    part(head, V * np.array([0.07, 0.06, 0.05]), F, (1, 1, 1), pos=(0, -0.29, -0.22), vcol=light_fur)  # chin
+    part(head, V * np.array([0.08, 0.12, 0.06]), F, (1, 1, 1), pos=(0, -0.3, -0.01), vcol=fur)         # bridge of the nose
+    nose = [(-0.045, 0.0), (0.045, 0.0), (0.0, -0.045)]
+    Vn, Fn = prism(nose, 0.03)
+    part(head, Vn[:, [0, 2, 1]], Fn, (0.35, 0.18, 0.2) if not queen else (0.08, 0.05, 0.06),
+         pos=(0, -0.4, -0.08), hpr=(0, -30, 0))                                                         # nose leather
+    Vm, Fm = tube_mesh([(-0.06, -0.385, -0.2), (0, -0.4, -0.18), (0.06, -0.385, -0.2)], 0.008, 6)
+    part(head, Vm, Fm, (0.05, 0.03, 0.03), orient=None)                                                 # mouth line
+    for sgn in (1, -1):
+        # ears: tall, slightly turned out, fur outside, pink-grey inside, tufts on the tips
+        ear = head.attachNewNode("ear")
+        ear.setPos(sgn * 0.21, 0.0, 0.24)
+        ear.setHpr(sgn * -10, -15, sgn * 25)
+        Vp, Fp = pyramid([(-0.14, 0.0), (0.14, 0.0), (0.0, 0.08)], (0.0, 0.02, 0.32))
+        part(ear, Vp, Fp, (1, 1, 1), vcol=fur, smooth=None)
+        Vi, Fi = pyramid([(-0.075, -0.01), (0.075, -0.01), (0.0, 0.03)], (0.0, -0.005, 0.24))
+        part(ear, Vi, Fi, (0.45, 0.3, 0.3) if not queen else (0.15, 0.08, 0.09), pos=(0, -0.015, 0.01), smooth=None)
+        Vt, Ft = tube_mesh([(0, 0.02, 0.29), (sgn * 0.01, 0.02, 0.35), (sgn * 0.02, 0.03, 0.4)], 0.008, 5)
+        part(ear, Vt, Ft, (0.1, 0.08, 0.07), orient=None)
+        # eyes: almond shaped, glowing iris with a vertical slit pupil, dark lid rims
+        lens = [(-0.075, 0.0), (-0.03, 0.035), (0.04, 0.04), (0.08, 0.005), (0.035, -0.03), (-0.03, -0.03)]
         Ve, Fe = prism(lens, 0.02)
-        part(head, Ve[:, [0, 2, 1]] * np.array([sgn, 1, 1]), Fe, eye_col, pos=(sgn * 0.17, -0.4, 0.02),
-             hpr=(0, 0, -sgn * 22), unlit=True)
-        Vs, Fs = box(0.016, 0.03, 0.085)
-        part(head, Vs, Fs, (0, 0, 0), pos=(sgn * 0.17, -0.415, 0.02), unlit=True)
-        glow(head, (sgn * 0.17, -0.44, 0.02), 0.26, (*eye_col, 0.95))
-        part(head, V * np.array([0.17, 0.09, 0.05]), F, (0.03, 0.025, 0.025),  # heavy, angled brow ridge
-             pos=(sgn * 0.17, -0.37, 0.1), hpr=(0, 0, sgn * 24))
-        Vf, Ff = lathe([(0.022, 0.0), (0.0, -0.15)], 8, "z")  # fangs
-        part(head, Vf, Ff, (0.85, 0.8, 0.68), pos=(sgn * 0.07, -0.6, -0.2), hpr=(0, 8, 0), orient="z")
-    part(root, V * np.array([0.6, 0.34, 0.26]), F, (1, 1, 1), pos=(0, 0.05, 0.42),
-         vcol=paint((0.04, 0.04, 0.05), (0.2, 0.19, 0.2), 0.2, 0.68))  # armoured shoulders
-    Vc, Fc = lathe([(0.2, 0.62), (0.25, 0.7), (0.2, 0.78)], 16, "z")
-    part(root, Vc, Fc, (0.25, 0.06, 0.05), orient="z")
+        Ve = Ve * np.array([1.35, 1.35, 1.0])
+        part(head, Ve[:, [0, 2, 1]] * np.array([sgn, 1, 1]), Fe, iris, pos=(sgn * 0.15, -0.3, 0.06),
+             hpr=(sgn * -20, 0, -sgn * 12), unlit=True)
+        Vs, Fs = box(0.014, 0.03, 0.065)
+        part(head, Vs * np.array([1, 1, 1.3]), Fs, (0, 0, 0), pos=(sgn * 0.15, -0.315, 0.06), hpr=(sgn * -20, 0, 0),
+             unlit=True)
+        Vr, Fr = tube_mesh([(sgn * (0.15 + 0.105 * math.cos(a)), -0.305 - 0.01 * math.cos(a), 0.06 + 0.05 * math.sin(a))
+                            for a in np.linspace(0, 2 * math.pi, 14)], 0.008, 5)
+        part(head, Vr, Fr, (0.03, 0.025, 0.025), orient=None)
+        glow(head, (sgn * 0.15, -0.33, 0.06), 0.22, (*eye_col, 0.7))
+        for k in range(4):  # whiskers fanning out from the pads
+            a = math.radians(-20 + k * 12)
+            Vw, Fw = tube_mesh([(sgn * 0.12, -0.36, -0.15 + 0.012 * k),
+                                (sgn * (0.12 + 0.2 * math.cos(a)), -0.37 + 0.05, -0.15 + 0.2 * math.sin(a)),
+                                (sgn * (0.12 + 0.42 * math.cos(a)), -0.3, -0.18 + 0.32 * math.sin(a))], 0.0035, 4)
+            part(head, Vw, Fw, (0.9, 0.88, 0.84), orient=None)
+    # neck fur, shoulders and the armoured collar of the warrior caste
+    part(root, V * np.array([0.28, 0.26, 0.3]), F, (1, 1, 1), pos=(0, 0.06, 0.72), vcol=light_fur)
+    part(root, V * np.array([0.62, 0.36, 0.28]), F, (1, 1, 1), pos=(0, 0.1, 0.4),
+         vcol=paint((0.04, 0.04, 0.05), (0.22, 0.21, 0.22), 0.2, 0.68))
+    Vc, Fc = lathe([(0.27, 0.6), (0.31, 0.68), (0.27, 0.76)], 20, "z")
+    part(root, Vc, Fc, (0.3, 0.07, 0.05) if not queen else (0.35, 0.28, 0.1), orient="z")
     if queen:
-        for k in range(9):  # crown of thin spikes
-            a = math.radians(-160 + k * 40)
-            p = (0.33 * math.cos(a), 0.33 * math.sin(a) + 0.05, 1.33)
-            Vk, Fk = lathe([(0.025, 0), (0.0, 0.32 + 0.12 * (k % 2))], 6, "z")
-            part(root, Vk, Fk, (0.45, 0.32, 0.12), pos=p, hpr=(0, 0, math.degrees(math.cos(a)) * 0.0), orient="z")
+        for k in range(7):  # a jewelled collar instead of a crown
+            a = math.radians(-150 + k * 20)
+            part(root, V * 0.025, F, (1.0, 0.15, 0.1), pos=(0.3 * math.cos(a), 0.3 * math.sin(a) + 0.05, 0.68),
+                 unlit=True)
         Vt, Ft = sweep([(-0.2, 0.9, 0.12, 0, 3), (1.9, 0.6, 0.08, 0, 3)], 16, "y")
         throne = part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(0, 2), name="throne")
         throne.setP(90)
         throne.setPos(0, 0.45, -0.1)
     root.setScale(scale)
+    return root
+
+
+SKIN_TONES = [(0.78, 0.6, 0.5), (0.6, 0.43, 0.32), (0.42, 0.28, 0.2), (0.86, 0.7, 0.6)]
+
+
+def build_human(parent, female=False, skin=0, collar=(1.0, 0.1, 0.05)):
+    """A standing human, about 1.75 units tall, facing -Y: realistic proportions (head, neck, torso with
+    shoulders / chest / hips, two-part arms with hands, legs, feet), ragged clothes, hair and a glowing
+    slave collar (named "collar"). Men are broad-shouldered with short hair, women narrower with long hair."""
+    root = parent.attachNewNode("human")
+    tone = np.array(SKIN_TONES[skin % len(SKIN_TONES)])
+    skin_col = lambda p: tuple(np.clip(tone * (0.92 + 0.08 * _noise(p, 12.0)), 0, 1))  # noqa: E731
+    cloth = paint((0.08, 0.07, 0.06), (0.3, 0.27, 0.22), 0.6, 1.4, grime=0.45)
+    hair_col = (0.08, 0.06, 0.05) if skin % 2 else (0.22, 0.14, 0.08)
+    V, F = icosphere(3)
+    sh = 0.19 if female else 0.23            # half shoulder width
+    hip = 0.17 if female else 0.15
+    # torso as a sweep along z (x = width, y = depth): hips, waist, chest, shoulders
+    torso = [(0.85, hip, 0.13, 0, 2.2), (1.0, hip * 0.82, 0.12, 0, 2.2), (1.15, sh * 0.78, 0.13, 0, 2.2),
+             (1.3, sh * 0.92, 0.14, 0, 2.3), (1.42, sh * 0.95, 0.12, 0, 2.4), (1.48, sh * 0.55, 0.08, 0, 2.2)]
+    Vt, Ft = sweep([(z, w, d, 0, n) for z, w, d, _, n in torso], 24, "y")
+    part(root, Vt[:, [0, 2, 1]], Ft, (1, 1, 1), orient="center", vcol=skin_col)
+    for sgn in (1, -1):  # shoulder muscles round off the silhouette
+        part(root, V * 0.062, F, (1, 1, 1), pos=(sgn * (sh - 0.03), 0.0, 1.41), vcol=skin_col)
+    # ragged clothes: a torn tunic / wrap over the hips (and chest for women)
+    rag = [(0.6, hip * 1.12, 0.15, 0, 2.2), (0.9, hip * 1.08, 0.145, 0, 2.2), (1.05, hip * 0.9, 0.135, 0, 2.2)]
+    if female:
+        rag += [(1.18, sh * 0.86, 0.16, -0.0, 2.2), (1.29, sh * 0.95, 0.19, 0, 2.2), (1.4, sh * 0.97, 0.15, 0, 2.3)]
+    Vr, Fr = sweep([(z, w, d, 0, n) for z, w, d, _, n in rag], 24, "y")
+    part(root, Vr[:, [0, 2, 1]], Fr, (1, 1, 1), orient="center", vcol=cloth)
+    # neck and head: skull, jaw, nose, brow, ears, hair
+    Vn, Fn = lathe([(0.055, 1.44), (0.05, 1.52), (0.055, 1.56)], 12, "z")
+    part(root, Vn, Fn, (1, 1, 1), orient="z", vcol=skin_col)
+    head = root.attachNewNode("head")
+    head.setPos(0, 0, 1.64)
+    part(head, V * np.array([0.085, 0.1, 0.11]), F, (1, 1, 1), vcol=skin_col)
+    part(head, V * np.array([0.065, 0.07, 0.05]), F, (1, 1, 1), pos=(0, -0.03, -0.065), vcol=skin_col)     # jaw
+    part(head, V * np.array([0.016, 0.03, 0.03]), F, (1, 1, 1), pos=(0, -0.1, -0.01), vcol=skin_col)      # nose
+    part(head, V * np.array([0.07, 0.025, 0.015]), F, (1, 1, 1), pos=(0, -0.085, 0.03), vcol=skin_col)    # brow
+    for sgn in (1, -1):
+        part(head, V * np.array([0.012, 0.022, 0.03]), F, (1, 1, 1), pos=(sgn * 0.085, 0.0, 0.0), vcol=skin_col)
+        part(head, V * 0.012, F, (0.05, 0.04, 0.04), pos=(sgn * 0.032, -0.088, 0.012))                    # eyes
+    if female:
+        part(head, V * np.array([0.095, 0.11, 0.1]), F, hair_col, pos=(0, 0.015, 0.03))
+        Vh, Fh = sweep([(0.05, 0.09, 0.06, 0, 2.2), (-0.15, 0.11, 0.05, 0, 2.2), (-0.32, 0.09, 0.03, 0, 2.0)], 16, "y")
+        part(head, Vh[:, [0, 2, 1]], Fh, hair_col, pos=(0, 0.06, 0.0), orient="center")                  # long hair
+    else:
+        part(head, V * np.array([0.09, 0.105, 0.07]), F, hair_col, pos=(0, 0.01, 0.05))                  # short hair
+    # arms: upper arm, forearm, hand; hanging, slightly bent
+    for sgn in (1, -1):
+        s0 = np.array([sgn * (sh - 0.02), 0.0, 1.4])
+        el = s0 + np.array([sgn * 0.05, 0.02, -0.29])
+        wr = el + np.array([sgn * 0.01, -0.06, -0.26])
+        for a, b, r0, r1 in ((s0, el, 0.05 if not female else 0.042, 0.04), (el, wr, 0.038, 0.03)):
+            Va, Fa = tube_mesh([a, (a + b) / 2, b], (r0 + r1) / 2, 10)
+            part(root, Va, Fa, (1, 1, 1), orient=None, vcol=skin_col)
+        part(root, V * np.array([0.03, 0.02, 0.06]), F, (1, 1, 1), pos=tuple(wr + (0, 0, -0.055)), vcol=skin_col)
+    # legs and feet
+    for sgn in (1, -1):
+        h0 = np.array([sgn * hip * 0.5, 0.0, 0.88])
+        kn = np.array([sgn * hip * 0.48, -0.02, 0.48])
+        an = np.array([sgn * hip * 0.45, 0.0, 0.07])
+        for a, b, r in ((h0, kn, 0.09 if female else 0.085), (kn, an, 0.058)):
+            Vl, Fl = tube_mesh([a, (a + b) / 2, b], r, 10)
+            part(root, Vl, Fl, (1, 1, 1), orient=None, vcol=skin_col if b[2] < 0.5 else cloth)
+        part(root, V * np.array([0.045, 0.1, 0.035]), F, (1, 1, 1), pos=tuple(an + (0, -0.05, -0.04)), vcol=skin_col)
+    # the collar
+    Vc, Fc = lathe([(0.065, 1.47), (0.07, 1.5), (0.065, 1.53)], 16, "z")
+    ring = part(root, Vc, Fc, collar, orient="z", unlit=True, name="collar")
+    glow(ring, (0, -0.07, 1.5), 0.16, (*collar, 0.9))
     return root
 
 

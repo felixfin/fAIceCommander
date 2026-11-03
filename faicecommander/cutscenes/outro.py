@@ -8,7 +8,7 @@ import numpy as np
 from ..render import models as M
 from .engine import Cutscene, Line, Shot
 from .fireworks import Fireworks
-from .props import Booms, Drifters, backlight, human, human_ship, lerp, look, shake, smoke
+from .props import Booms, Drifters, backlight, cached_copy, helmet, human, human_ship, lerp, look, shake, smoke
 from .timeline import OUTRO
 
 LINES = [
@@ -139,7 +139,18 @@ def _collars_update(t, dt, s, app):
 
 
 def _city(root, rng):
-    """A liberated city at night: blocky towers with lit windows on a dark plain, a crowd in front."""
+    """A liberated city at night: blocky towers with lit windows on a dark plain (cached), a crowd in front."""
+    cached_copy(root, "city", lambda r: _towers(r, np.random.default_rng(10)))
+    crowd = []
+    for k in range(40):
+        h = human(root, (rng.uniform(-9, 9), rng.uniform(2.0, 6.0), 0), female=k % 2 == 1, collar=(0.15, 0.15, 0.15),
+                  skin=k % len(M.SKIN_TONES))
+        h.setH(180 + rng.uniform(-30, 30))
+        crowd.append((h, rng.uniform(0, 6.3), rng.uniform(4, 7)))
+    return crowd
+
+
+def _towers(root, rng):
     V, F = M.box(1, 1, 1)
     M.part(root, V, F, (0.02, 0.02, 0.03), pos=(0, 20, -0.1), scale=(80, 60, 0.2), smooth=None)
     for k in range(34):
@@ -152,12 +163,7 @@ def _city(root, rng):
                 wx = x + rng.uniform(-w / 2.4, w / 2.4)
                 M.part(root, V, F, (1.0, 0.8, 0.45), pos=(wx, y - w / 2 - 0.01, rng.uniform(0.4, h - 0.3)),
                        scale=(0.12, 0.02, 0.16), unlit=True, smooth=None)
-    crowd = []
-    for k in range(40):
-        h = human(root, (rng.uniform(-9, 9), rng.uniform(2.0, 6.0), 0), female=k % 2 == 1, collar=(0.15, 0.15, 0.15))
-        h.setH(180 + rng.uniform(-30, 30))
-        crowd.append((h, rng.uniform(0, 6.3), rng.uniform(4, 7)))
-    return crowd
+    root.flattenStrong()
 
 
 def _fireworks(root, app):
@@ -191,7 +197,7 @@ def _fireworks_update(t, dt, s, app):
 def _name(root, app):
     app.webcam_fullscreen(True)
     if not app.tracker_ok:  # no camera: show the helmet itself
-        M.build_helmet(root)
+        helmet(root)
         look(app, (0, -9, 0.2), (0, 0, -0.3))
     return {"cleanup": lambda: app.webcam_fullscreen(False)}
 

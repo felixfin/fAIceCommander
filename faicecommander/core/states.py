@@ -106,6 +106,9 @@ class LoadingState(State):
         self.ship.setPos(0, 3.5, 0.5)
         self.ship.setScale(1.4)
         self.bar = Bar(app.hud.center, -0.6, -0.25, 1.2, 0.04, (1, 0.45, 0.85, 1), segments=50)
+        from ..cutscenes.prewarm import steps
+        self.props = steps()        # intro/outro set pieces: built once per frame here, so cuts never stall
+        self.props_total = len(self.props)
         app.hud.message("fAIceCommander 3D", "Preparing the soundtrack (first start only)", "")
         app.hud.title.setZ(0.42)
         app.hud.subtitle.setZ(0.3)
@@ -114,14 +117,23 @@ class LoadingState(State):
     @property
     def done(self):
         b = self.app.audio.builder
-        return (b.startup_ready or b.error is not None) and self.app.world.mother_model.model is not None
+        return ((b.startup_ready or b.error is not None) and self.app.world.mother_model.model is not None
+                and not self.props)
 
     def update(self, dt, face, ctl):
         self.t += dt
         b = self.app.audio.builder
         mother = 0.0 if self.app.world.mother_model.model is None else 1.0
-        self.bar.set(0.92 * b.startup_progress + 0.08 * mother)
-        self.app.hud.hint.setText(b.status or ("building the Mother's ship" if not mother else "ready"))
+        if self.props and self.t > 0.2:
+            tmp = self.app.hidden.attachNewNode("prewarm")
+            self.props.pop(0)(tmp)
+            tmp.removeNode()
+        sets = 1 - len(self.props) / self.props_total
+        self.bar.set(0.75 * b.startup_progress + 0.05 * mother + 0.2 * sets)
+        status = b.status or ("building the Mother's ship" if not mother else "")
+        if not status and self.props:
+            status = "building the intro and outro sets"
+        self.app.hud.hint.setText(status or "ready")
         self.ship.setH(self.t * 25)
         self.ship.setR(8 * math.sin(self.t * 0.9))
         if self.done and self.t > 0.3:

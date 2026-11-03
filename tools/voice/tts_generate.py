@@ -23,9 +23,12 @@ VOICES = HERE / "models"
 OUT = HERE / "raw"
 OUT.mkdir(exist_ok=True)
 
-# id: (voice, spoken text, length_scale)  -- length_scale > 1 is slower; "//" marks a long pause;
+# id: (voice, spoken text, length_scale)  -- length_scale > 1 is slower; "//" marks a long pause, "/" a short
+# one; "{1.3}" at the start of a part sets that part's own length_scale (slow and clear for names);
 # [[ ... ]] passes phonemes straight to the voice (for names it would otherwise slur)
-PAUSE_SENTENCE, PAUSE_LONG = 0.32, 0.75
+import re  # noqa: E402
+
+PAUSE_SENTENCE, PAUSE_SHORT, PAUSE_LONG = 0.32, 0.35, 0.75
 NATHANIEL = "[[ nəθˈænjəl ]]"
 LINES = {
     "intro_01": ("norman", "For centuries, humanity has been at war with the Catliens.", 1.18),
@@ -33,7 +36,8 @@ LINES = {
     "intro_03": ("norman", "Most of us are slaves now: pets, of the higher castes.", 1.12),
     "intro_04": ("norman", "They neuter the males. They milk the females.", 1.15),
     "intro_05": ("norman", "One mind steers the swarm: the Mother. Destroy her, and the swarm falls into chaos.", 1.12),
-    "intro_06": ("norman", f"Commander James {NATHANIEL} Honor found her. His fleet struck hard.", 1.08),
+    "intro_06": ("norman", f"{{1.3}}Commander [[ dʒˈeɪmz ]] {NATHANIEL} [[ ˈɒnə ]]. / Found her. His fleet struck hard.",
+                 1.05),
     "intro_07": ("norman", "Her hyperdrive failed. // But his fleet was lost.", 1.1),
     "intro_08": ("kristin", "Only the head, and part of the torso, could be saved.", 1.0),
     "intro_09": ("norman", "We built him a ship from the wreckage. There is nothing left for another attempt.", 1.12),
@@ -54,14 +58,17 @@ for line_id, (voice, text, scale) in LINES.items():
         continue
     if voice not in loaded:
         loaded[voice] = PiperVoice.load(str(VOICES / f"{FILES[voice]}.onnx"))
-    # less noise = steadier, more fluent articulation (fewer slurred or wobbly words)
-    cfg = SynthesisConfig(length_scale=scale, noise_scale=0.45, noise_w_scale=0.5)
     v = loaded[voice]
     rate = v.config.sample_rate
     pcm = b""
-    for k, part in enumerate(text.split("//")):
+    for k, (sep, part) in enumerate(re.findall(r"(^|//|/)([^/]+)", text)):
         if k:
-            pcm += bytes(2) * int(rate * PAUSE_LONG)
+            pcm += bytes(2) * int(rate * (PAUSE_LONG if sep == "//" else PAUSE_SHORT))
+        m = re.match(r"\s*\{([\d.]+)\}", part)
+        part_scale = float(m.group(1)) if m else scale
+        part = part[m.end():] if m else part
+        # less noise = steadier, more fluent articulation (fewer slurred or wobbly words)
+        cfg = SynthesisConfig(length_scale=part_scale, noise_scale=0.45, noise_w_scale=0.5)
         for j, chunk in enumerate(v.synthesize(part.strip(), syn_config=cfg)):
             if j:
                 pcm += bytes(2) * int(rate * PAUSE_SENTENCE)

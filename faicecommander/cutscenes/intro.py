@@ -12,9 +12,10 @@ from panda3d.core import NodePath, TextNode
 from ..render import models as M
 from .engine import Cutscene, Line, Shot
 from .props import (
-    Booms, Drifters, RobotArm, backlight, beam, brain_jar, burning_planet, empty_ship, escape_pod, hangar, human,
-    human_ship, lerp, look, operating_table, shake, slave_hall, smoke, tag,
+    Booms, Drifters, RobotArm, backlight, beam, brain_jar, burning_planet, cached_copy, catlien, empty_ship,
+    escape_pod, hangar, human, human_ship, lerp, look, operating_table, shake, slave_hall, smoke, tag,
 )
+from .props import brain as props_brain, helmet as props_helmet
 from .timeline import INTRO
 
 LINES = [
@@ -38,7 +39,11 @@ def _line(at, idx, style="caption"):
 
 
 def starfield(root, n=260, radius=90.0, seed=11):
-    """Distant stars as tiny unlit points (flattened into one node)."""
+    """Distant stars as tiny unlit points (flattened into one node, cached)."""
+    return cached_copy(root, f"stars-{n}-{radius:g}-{seed}", lambda r: _starfield(r, n, radius, seed))
+
+
+def _starfield(root, n, radius, seed):
     stars = root.attachNewNode("stars")
     rng = np.random.default_rng(seed)
     V, F = M.icosphere(0)
@@ -138,7 +143,6 @@ def _slaves(root, app):
     app.backdrop.set_visible(False)
     hall = root.attachNewNode("hall")
     slave_hall(hall)
-    hall.flattenStrong()
     backlight(root, (0, 12, 2.5), 14.0)
     backlight(root, (0, 5, 1.2), 6.0, (0.7, 0.02, 0.02, 0.3))
     people = []
@@ -149,7 +153,7 @@ def _slaves(root, app):
         tag(root, ("FEMALE " if female else "MALE ") + ("4471", "0932", "1187", "5530", "2206", "0019")[i],
             (x, 1.1, 1.95), 0.15)
         people.append(h)
-    master = M.build_catlien(root, 2.0)
+    master = catlien(root, 2.0)
     master.setPos(0, 4.4, 0.3)
     master.setLightOff(1)
     for x in (-3.0, -1.8, -0.6, 0.6, 1.8, 3.0):  # leashes from the collars to the master's claw
@@ -215,7 +219,7 @@ def _mother_update(t, dt, s, app):
 
 def _queen(root, app):
     app.backdrop.set_visible(False)
-    queen = M.build_catlien(root, 2.4, queen=True)
+    queen = catlien(root, 2.4, queen=True)
     queen.setPos(0, 0.8, -1.6)
     Vh, Fh = M.hemisphere(3)
     M.part(root, Vh * np.array([2.2, 1.6, 2.6]), Fh, (0.9, 0.3, 0.2, 0.12), pos=(0, 0.2, -0.6),
@@ -399,14 +403,13 @@ def _hangar(root, app):
     app.backdrop.set_visible(False)
     bay = root.attachNewNode("bay")
     hangar(bay)
-    bay.flattenStrong()
     ship = empty_ship(root)
-    helmet = M.cached("helmet", M.build_helmet).getChild(0).copyTo(root)
+    helmet = props_helmet(root)
     helmet.setScale(0.3)
     cable = root.attachNewNode("cable")
     Vc, Fc = M.lathe([(0.015, 0.0), (0.015, 1.0)], 6, "z")
     M.part(cable, Vc, Fc, (0.1, 0.1, 0.11), orient=None)
-    brain = M.build_brain(root, 0.24, aura=False)  # what the helmet leaves in the cockpit
+    brain = props_brain(root, 0.24)  # what the helmet leaves in the cockpit
     brain.setPos(0, 0.55, 0.47)
     brain.hide()
     halo = M.glow(root, (0, 0.55, 0.5), 0.65, (1.0, 0.4, 0.7, 0.4))
@@ -469,7 +472,6 @@ def _waking(root, app):
     app.backdrop.set_visible(True, stars=True)
     bay = root.attachNewNode("bay")
     hangar(bay)
-    bay.flattenStrong()
     doors = []
     V, F = M.box(1, 1, 1)
     for sgn in (1, -1):  # the bay doors ahead
@@ -514,7 +516,7 @@ def _becoming(root, app):
     app.hypno_alpha = 0.0
     helmet = None
     if not app.tracker_ok:  # no camera: show the helmet itself
-        helmet = M.build_helmet(root)
+        helmet = props_helmet(root)
         look(app, (0, -9, 0.2), (0, 0, -0.3))
     return {"helmet": helmet, "hit": False, "cleanup": lambda: app.webcam_fullscreen(False)}
 

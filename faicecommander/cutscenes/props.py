@@ -23,6 +23,12 @@ def shake(pos, amount, rng):
     return tuple(p + rng.uniform(-amount, amount) for p in pos)
 
 
+def cached_copy(root, name, build):
+    """A copy of a set piece from the model cache (built - and cached - on first use). Building the
+    props takes up to seconds and would freeze the picture at the cut; loading them takes milliseconds."""
+    return M.cached(name, build).copyTo(root)
+
+
 # ---------------------------------------------------------------- atmosphere
 
 def smoke(root, pos, size, color=(0.05, 0.04, 0.04, 0.6)):
@@ -72,6 +78,10 @@ def beam(root, a, b, color, width=0.05):
 
 def burning_planet(root, radius=7.0):
     """A world on fire: black crust, glowing magma veins at two scales, a hot atmosphere halo."""
+    return cached_copy(root, f"planet-{radius:g}", lambda r: _burning_planet(r, radius))
+
+
+def _burning_planet(root, radius):
     planet = root.attachNewNode("planet")
     V, F = M.icosphere(4)
     rng = np.random.default_rng(4)
@@ -106,24 +116,26 @@ def burning_planet(root, radius=7.0):
     return planet
 
 
-def human(root, pos, female=False, collar=(1.0, 0.1, 0.05)):
-    """A dark human silhouette with a glowing slave collar."""
-    node = root.attachNewNode("human")
-    dark = (0.02, 0.02, 0.025)
-    V, F = M.lathe([(0.0, 0.0), (0.16, 0.05), (0.2 if female else 0.18, 0.5), (0.24 if female else 0.27, 1.05),
-                    (0.12, 1.3), (0.0, 1.32)], 14, "z")
-    M.part(node, V, F, dark, orient="z")
-    Vh, Fh = M.icosphere(2)
-    M.part(node, Vh * np.array([0.12, 0.13, 0.15]), Fh, dark, pos=(0, 0, 1.5))
-    for sgn in (1, -1):  # arms hanging down
-        Vt, Ft = M.tube_mesh([(sgn * 0.25, 0, 1.22), (sgn * 0.31, 0.02, 0.9), (sgn * 0.3, 0.05, 0.6)], 0.045, 6)
-        M.part(node, Vt, Ft, dark, orient=None)
-    Vc, Fc = M.lathe([(0.085, 1.33), (0.09, 1.36), (0.085, 1.39)], 16, "z")
-    ring = M.part(node, Vc, Fc, collar, orient="z", unlit=True, name="collar")
-    M.glow(ring, (0, -0.08, 1.36), 0.18, (*collar, 0.9))
+def human(root, pos, female=False, collar=(1.0, 0.1, 0.05), skin=None):
+    """A man or a woman with a slave collar (cached models; skin tone varies along the row)."""
+    if skin is None:
+        skin = int(abs(pos[0]) * 7 + pos[1] * 3) % len(M.SKIN_TONES)
+    key = "-".join(f"{c:.2f}" for c in collar)
+    node = cached_copy(root, f"human-{int(female)}-{skin}-{key}",
+                       lambda r: M.build_human(r, female=female, skin=skin, collar=collar))
     node.setPos(*pos)
-    node.setLightOff(1)  # a pure silhouette against the backlight
+    node.setColorScale(0.8, 0.75, 0.75, 1)  # dim, unhealthy light
     return node
+
+
+def catlien(root, scale=1.0, queen=False):
+    node = cached_copy(root, f"catlien-{int(queen)}", lambda r: M.build_catlien(r, 1.0, queen=queen))
+    node.setScale(scale)
+    return node
+
+
+def helmet(root):
+    return cached_copy(root, "helmet", M.build_helmet)
 
 
 def tag(root, text, pos, scale=0.18, color=(1, 0.35, 0.3, 1)):
@@ -145,6 +157,10 @@ def backlight(root, pos, size, color=(0.9, 0.05, 0.03, 0.45)):
 
 def slave_hall(root, depth=14.0):
     """A dark, pillared hall: wet floor, columns with chains, red light far behind."""
+    return cached_copy(root, "slave-hall", lambda r: _slave_hall(r, depth))
+
+
+def _slave_hall(root, depth):
     V, F = M.box(1, 1, 1)
     M.part(root, V, F, (0.03, 0.025, 0.025), pos=(0, depth / 2, -0.05), scale=(16, depth + 6, 0.1), smooth=None)
     rng = np.random.default_rng(6)
@@ -164,6 +180,7 @@ def slave_hall(root, depth=14.0):
                     link.lookAt(Point3(*p1))
     for _ in range(8):  # fog lying on the floor
         smoke(root, (rng.uniform(-5, 5), rng.uniform(1, depth), 0.3), rng.uniform(2.0, 3.5), (0.1, 0.03, 0.03, 0.35))
+    root.flattenStrong()
 
 
 def empty_ship(parent):
@@ -201,13 +218,18 @@ class RobotArm:
     """A three-segment surgical / welding arm on a base; angles are set per frame."""
 
     def __init__(self, root, pos, color=(0.7, 0.72, 0.75), tool=(0.4, 1.0, 0.9)):
-        self.base = root.attachNewNode("arm")
+        key = "-".join(f"{c:.2f}" for c in (*color, *tool))
+        self.base = cached_copy(root, f"arm-{key}", lambda r: self._build(r, color, tool)).find("arm")
         self.base.setPos(*pos)
+        self.joints = [self.base.find(f"**/j{k}") for k in range(3)]
+
+    @staticmethod
+    def _build(root, color, tool):
+        base = root.attachNewNode("arm")
         paint = M.paint((0.08, 0.08, 0.09), color, -0.1, 0.1, grime=0.15)
         Vb, Fb = M.lathe([(0.28, 0.0), (0.24, 0.12), (0.14, 0.2)], 16, "z")
-        M.part(self.base, Vb, Fb, (1, 1, 1), orient="z", vcol=paint)
-        self.joints = []
-        parent, offset = self.base, 0.2
+        M.part(base, Vb, Fb, (1, 1, 1), orient="z", vcol=paint)
+        parent, offset = base, 0.2
         Vi, Fi = M.icosphere(1)
         for k, ln in enumerate((0.9, 0.75, 0.35)):
             j = parent.attachNewNode(f"j{k}")
@@ -216,11 +238,10 @@ class RobotArm:
             Vs, Fs = M.sweep([(0.0, r0, r0, 0, 3), (ln, r1, r1, 0, 3)], 12, "x")
             M.part(j, Vs[:, [1, 2, 0]], Fs, (1, 1, 1), orient="center", vcol=paint)  # segment along local z
             M.part(j, Vi * (0.1 - k * 0.02), Fi, (0.15, 0.15, 0.16))
-            self.joints.append(j)
             parent, offset = j, ln
-        self.tip = parent.attachNewNode("tip")
-        self.tip.setZ(offset)
-        M.glow(self.tip, (0, 0, 0), 0.18, (*tool, 0.9))
+        tip = parent.attachNewNode("tip")
+        tip.setZ(offset)
+        M.glow(tip, (0, 0, 0), 0.18, (*tool, 0.9))
 
     def pose(self, yaw, a0, a1, a2):
         self.base.setH(yaw)
@@ -230,6 +251,10 @@ class RobotArm:
 
 def operating_table(root):
     """The table, a body under a sheet, the head clamp, monitors."""
+    return cached_copy(root, "operating-table", _operating_table)
+
+
+def _operating_table(root):
     V, F = M.box(1, 1, 1)
     M.part(root, V, F, (0.3, 0.32, 0.34), pos=(0, 0, 0.85), scale=(1.0, 2.4, 0.1), smooth=None)
     M.part(root, V, F, (0.12, 0.12, 0.13), pos=(0, 0, 0.42), scale=(0.3, 0.3, 0.84), smooth=None)
@@ -245,23 +270,34 @@ def operating_table(root):
     M.part(root, Vc, Fc, (1, 1, 1), pos=(0, 1.0, 1.05), orient="y", vcol=clamp)
 
 
+def brain(root, scale):
+    """A bare brain (cached)."""
+    return cached_copy(root, f"brain-{scale:g}", lambda r: M.build_brain(r, scale, aura=False)).getChild(0)
+
+
 def brain_jar(root, pos):
     """The commander's brain floating in a glowing tank with bubbles."""
-    jar = root.attachNewNode("jar")
+    jar = cached_copy(root, "jar", _brain_jar)
     jar.setPos(*pos)
+    return jar, jar.find("**/brain")
+
+
+def _brain_jar(jar):
     Vg, Fg = M.lathe([(0.0, 0.0), (0.32, 0.0), (0.34, 0.05), (0.34, 0.75), (0.3, 0.8), (0.0, 0.8)], 24, "z")
     M.part(jar, Vg, Fg, (0.4, 1.0, 0.7, 0.22), orient="z", alpha=True, two_sided=True)
     Vc, Fc = M.lathe([(0.37, -0.05), (0.38, 0.05), (0.36, 0.1)], 24, "z")
     M.part(jar, Vc, Fc, (0.25, 0.25, 0.27), orient="z")
     M.part(jar, Vc, Fc, (0.25, 0.25, 0.27), pos=(0, 0, 0.75), orient="z")
-    brain = M.build_brain(jar, 0.2, aura=False)
-    brain.setPos(0, 0, 0.42)
+    M.build_brain(jar, 0.2, aura=False).setPos(0, 0, 0.42)
     M.glow(jar, (0, 0, 0.4), 0.9, (0.4, 1.0, 0.7, 0.4))
-    return jar, brain
 
 
 def hangar(root):
     """A dim shipyard bay: floor grid, side walls with lit windows, two gantry cranes."""
+    return cached_copy(root, "hangar", _hangar)
+
+
+def _hangar(root):
     V, F = M.box(1, 1, 1)
     floor = M.paint((0.03, 0.035, 0.04), (0.16, 0.17, 0.19), -0.1, 0.1, grime=0.5)
     M.part(root, V, F, (1, 1, 1), pos=(0, 0, -0.75), scale=(20, 24, 0.1), vcol=floor, smooth=None)
@@ -280,6 +316,7 @@ def hangar(root):
                    scale=(1.4, 0.32, 0.05), smooth=None)
     for x in (-4, 0, 4):
         M.glow(root, (x, 0, 4.6), 2.5, (1.0, 0.85, 0.6, 0.25))  # work lamps
+    root.flattenStrong()
 
 
 class Booms:
