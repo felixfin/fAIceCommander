@@ -1,7 +1,8 @@
-"""Webcam capture + MediaPipe FaceLandmarker in a background thread.
+"""Webcam capture + MediaPipe FaceLandmarker (and the selfie segmenter) in a background thread.
 
 The frame is mirrored *before* detection, so everything downstream (steering, the AR helmet,
-the displayed image) lives in the same mirror-image space the player sees.
+the displayed image) lives in the same mirror-image space the player sees. The segmenter's
+person mask lets the webcam view replace the room behind the player with a cockpit.
 """
 import math
 import threading
@@ -30,6 +31,7 @@ class FaceState:
     blink: float = 0.0         # mean of eyeBlinkLeft/Right, 0..1
     landmarks: np.ndarray = None  # (478, 3): x, y in pixels of the mirrored frame, depth in pixels
     frame: np.ndarray = None      # mirrored BGR frame
+    mask: np.ndarray = None       # uint8 person mask (255 = player), same size as the frame; None if off
     frame_id: int = 0
 
 
@@ -70,6 +72,16 @@ class FaceTracker:
             running_mode=vision.RunningMode.VIDEO, num_faces=1,
             output_face_blendshapes=True, output_facial_transformation_matrixes=False)
         self._landmarker = vision.FaceLandmarker.create_from_options(options)
+        self._segmenter = None
+        seg_model = ASSETS_DIR / "selfie_segmenter.tflite"
+        if self.cfg.get("display.webcam_background", True) and seg_model.exists():
+            try:
+                self._segmenter = vision.ImageSegmenter.create_from_options(vision.ImageSegmenterOptions(
+                    base_options=mp.tasks.BaseOptions(model_asset_path=str(seg_model)),
+                    running_mode=vision.RunningMode.VIDEO, output_confidence_masks=True, output_category_mask=False))
+            except Exception:  # the cockpit background is cosmetic
+                self._segmenter = None
+        self._mask = None
         self._cap, self._cv2, self._mp = cap, cv2, mp
         self._thread = threading.Thread(target=self._run, name="face-tracker", daemon=True)
         self._thread.start()
@@ -81,6 +93,8 @@ class FaceTracker:
             self._thread.join(timeout=2)
             self._cap.release()
             self._landmarker.close()
+            if self._segmenter is not None:
+                self._segmenter.close()
 
     def latest(self):
         with self._lock:
@@ -101,15 +115,29 @@ class FaceTracker:
                 ts = last_ts + 1
             last_ts = ts
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            result = self._landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+            image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            result = self._landmarker.detect_for_video(image, ts)
             frame_id += 1
             state = self._analyse(result, frame, frame_id)
+            if self._segmenter is not None:
+                state.mask = self._person_mask(image, ts)
             with self._lock:
                 self.state = state
             fps_n += 1
             now = time.monotonic()
             if now - fps_t >= 1.0:
                 self.fps, fps_n, fps_t = fps_n / (now - fps_t), 0, now
+
+    def _person_mask(self, image, ts):
+        """Smoothed (in time and at the edges) person mask as uint8."""
+        cv2 = self._cv2
+        conf = self._segmenter.segment_for_video(image, ts).confidence_masks[0].numpy_view()[..., 0]
+        if self._mask is None or self._mask.shape != conf.shape:
+            self._mask = conf.copy()
+        self._mask = self._mask * 0.45 + conf * 0.55  # less flicker
+        m = np.clip((self._mask - 0.25) / 0.5, 0, 1)
+        m = cv2.GaussianBlur(m, (0, 0), 2.0)
+        return (m * 255).astype(np.uint8)
 
     @staticmethod
     def _analyse(result, frame, frame_id):

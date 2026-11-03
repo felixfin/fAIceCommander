@@ -1,14 +1,12 @@
 """Boltzmann brains: they form out of the void, drift towards the ship with the scroll and fade
 after a few seconds. Shootable - and they burst messily."""
-from panda3d.core import NodePath
-
 from ...render import models as M
 
 
 class BrainLibrary:
     def __init__(self, count=3):
-        self.store = NodePath("brain-library")
-        self.models = [M.build_brain(self.store, 1.0, aura=True) for _ in range(count)]
+        self.store = M.cached("brains", lambda root: [M.build_brain(root, 1.0, aura=True) for _ in range(count)])
+        self.models = list(self.store.getChildren())
 
 
 class Brain:
@@ -26,6 +24,7 @@ class Brain:
         self.beam_heat = 0.0
         self.spin = rng.uniform(-60, 60, 3)
         self.hpr = rng.uniform(-30, 30, 3)
+        self.seek = 0.0          # sideways drift speed towards the ship (units/s)
         self.node.setScale(0.001)
 
     @property
@@ -36,9 +35,12 @@ class Brain:
         self.health -= amount / self.resist[weapon]
         return self.health <= 1e-6
 
-    def update(self, dt, scroll):
+    def update(self, dt, scroll, ship_x=None):
         self.t += dt
         self.y -= scroll * dt
+        if self.seek and ship_x is not None:
+            dx = ship_x - self.x
+            self.x += max(-self.seek * dt, min(self.seek * dt, dx))
         form = min(1.0, self.t / self.FORM_S)
         fade = min(1.0, max(0.0, (self.life - self.t) / self.FADE_S))
         grow = form * (1 + 0.25 * (1 - form)) * fade  # slight overshoot while materialising

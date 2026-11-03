@@ -3,7 +3,7 @@ the hypno light and blood/brain splatter on the 'screen glass'."""
 import math
 
 import numpy as np
-from panda3d.core import CardMaker, Point3, SamplerState, Texture, TransparencyAttrib
+from panda3d.core import CardMaker, Point3, SamplerState, Texture, TextureStage, TransparencyAttrib
 
 DIST = 2.0  # distance in front of the camera
 
@@ -139,3 +139,75 @@ class SplatterOverlay:
         for card, _ in self.splats:
             card.removeNode()
         self.splats = []
+
+
+def _vignette_texture(n=256):
+    y, x = np.mgrid[-1:1:n * 1j, -1:1:n * 1j]
+    r = np.hypot(x * 0.85, y)
+    a = np.clip((r - 0.55) / 0.75, 0, 1) ** 1.6 * 0.92
+    return _rgba_texture("vignette", np.stack([np.zeros_like(a)] * 3 + [a], -1))
+
+
+def _grain_texture(n=256, seed=3):
+    rng = np.random.default_rng(seed)
+    g = rng.random((n, n))
+    a = (np.abs(g - 0.5) * 2) ** 4 * 0.11
+    v = (g > 0.5).astype(float)
+    tex = _rgba_texture("grain", np.stack([v, v, v, a], -1))
+    tex.setWrapU(SamplerState.WM_repeat)
+    tex.setWrapV(SamplerState.WM_repeat)
+    return tex
+
+
+class CinemaOverlay:
+    """Film look for the cutscenes: letterbox bars, vignette, animated grain and light flicker.
+    flicker(amount) dims the picture for a moment (dying lights, lightning before the flash)."""
+
+    def __init__(self, camera, lens):
+        self.root = camera.attachNewNode("cinema")
+        self.lens = lens
+        self.vignette = _card(self.root, 1.0, _vignette_texture(), 70)
+        self.grain = _card(self.root, 1.0, _grain_texture(), 71)
+        cm = CardMaker("bar")
+        cm.setFrame(-1, 1, -1, 1)
+        self.bars = []
+        for _ in range(2):
+            bar = self.root.attachNewNode(cm.generate())
+            bar.setColor(0, 0, 0, 1)
+            for fn in (bar.setLightOff, bar.setShaderOff):
+                fn(1)
+            bar.setDepthTest(False)
+            bar.setDepthWrite(False)
+            bar.setBin("fixed", 72)
+            self.bars.append(bar)
+        self.dim = _card(self.root, 1.0, _vignette_texture(4), 69)
+        self.dim.setTextureOff(1)
+        self.dim.setColor(0, 0, 0, 1)
+        self.rng = np.random.default_rng(5)
+        self.t, self.flick = 0.0, 0.0
+        self.root.hide()
+
+    def show(self, on=True):
+        self.root.show() if on else self.root.hide()
+
+    def flicker(self, amount=0.7):
+        self.flick = max(self.flick, amount)
+
+    def update(self, dt):
+        if self.root.isHidden():
+            return
+        self.t += dt
+        fov = self.lens.getFov()
+        hw = math.tan(math.radians(fov[0] / 2)) * DIST
+        hh = math.tan(math.radians(fov[1] / 2)) * DIST
+        for card in (self.vignette, self.grain, self.dim):
+            card.setScale(hw * 1.05, 1, hh * 1.05)
+        bar_h = hh * 0.12  # 2.39:1-ish letterbox
+        for sgn, bar in zip((1, -1), self.bars):
+            bar.setScale(hw * 1.1, 1, bar_h)
+            bar.setPos(0, DIST, sgn * (hh - bar_h + 0.001))
+        self.grain.setTexOffset(TextureStage.getDefault(), self.rng.random(), self.rng.random())
+        self.grain.setTexScale(TextureStage.getDefault(), 3.0, 3.0 * hh / hw)
+        self.flick = max(0.0, self.flick - dt * 2.5)
+        breathe = 0.03 * (math.sin(self.t * 23) * math.sin(self.t * 7.1)) ** 2  # old projector shimmer
+        self.dim.setAlphaScale(min(0.95, self.flick + breathe))

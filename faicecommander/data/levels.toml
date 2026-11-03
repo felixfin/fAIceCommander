@@ -1,4 +1,8 @@
 # Level numbers. Behaviour lives in faicecommander/game/levels/level_XX_*.py.
+#
+# The [level_XX] tables are the EASY values. [medium.level_XX] and [hard.level_XX] only list what
+# changes for those difficulties; everything else falls back to the easy value.
+# "asteroid_wobble_px" (px/s^2) bends asteroid paths: 0 = straight lines.
 
 [level_01]
 name = "Asteroid Belt"
@@ -8,6 +12,7 @@ asteroid_count = 3            # always this many category 1 asteroids
 asteroid_size_px = [10, 30]   # width
 asteroid_speed_px = [30, 140] # own speed, on top of the scroll
 asteroid_spread_deg = 55      # random direction around "straight down"
+asteroid_wobble_px = 0
 damage_percent = 25
 score_per_kill = 100
 score_per_second = 10
@@ -22,6 +27,7 @@ small_size_px = [10, 30]
 large_size_px = [30, 50]
 asteroid_speed_px = [30, 130]
 asteroid_spread_deg = 50
+asteroid_wobble_px = 0
 damage_percent = 25           # category 1
 large_damage_percent = 50     # category 2
 fragments_max = 3
@@ -34,18 +40,20 @@ score_per_second = 10
 name = "Hypno Nebula"
 music = "hypno"
 duration_s = 90
-asteroid_count = [1, 2]       # less dense: one or two at a time
-asteroid_size_px = [10, 30]
-asteroid_speed_px = [30, 120]
-asteroid_spread_deg = 45
+asteroid_count = [4, 6]       # a dense field: memorise it before you close your eyes
+asteroid_size_px = [12, 30]
+asteroid_speed_px = [20, 90]
+asteroid_spread_deg = 40
+asteroid_wobble_px = 0
 damage_percent = 25
 score_per_kill = 100
 score_per_second = 10
 score_per_pulse = 500         # survived a pulse with closed eyes
-pulse_warning_s = 3
-pulse_duration_s = 10
-pulse_first_s = 12
-pulse_interval_s = [22, 30]   # calm time between pulses
+pulse_warning_s = 3           # time to look at the field and memorise it
+pulse_duration_s = [3.5, 4.5]
+pulse_first_s = 10
+pulse_interval_s = [12, 17]   # calm time between pulses
+pulse_spawns = false          # no new asteroids while your eyes are closed: dodge what you remember
 eyes_grace_s = 0.5            # time to close your eyes after the pulse hits
 
 [level_04]
@@ -53,12 +61,13 @@ name = "The Void"
 music = "void_brains"
 void = true                   # no stars, no nebula
 duration_s = 60
-max_brains = 10
-brain_spawn_per_s = 4.0
-brain_life_s = [1.0, 3.0]
+max_brains = [3, 10]          # at the start / at the end of the level
+brain_spawn_per_s = [1.5, 4.0]
+brain_life_s = [1.0, 6.0]     # each brain lives a random time in this range
 brain_size_px = 13            # about a quarter of the ship
 brain_keepout_px = 110        # never form this close to the ship
-damage_percent = 5
+brain_seek_px = 0             # sideways drift towards the ship
+damage_percent = 12
 score_per_kill = 50
 score_per_second = 15
 
@@ -69,13 +78,24 @@ asteroid_count = [1, 3]
 asteroid_size_px = [10, 30]
 asteroid_speed_px = [30, 120]
 asteroid_spread_deg = 45
+asteroid_wobble_px = 0
 damage_percent = 25
-raiders = 2
+raider_waves = [2]            # raiders per wave; the next wave comes when the current one is gone
+raider_toughness = 2.0        # x the hits from [targets.raider]
 raider_speed_px = 220
 raider_fire_interval_s = [1.3, 2.4]
 raider_shot_speed_px = 420
 shot_damage_percent = 10
+# weapon mix per attack: laser shot / a thrown space mouse / belly roll (tractor pull)
+raider_weapons = { laser = 0.6, mouse = 0.25, belly = 0.15 }
+mouse_speed_px = 200
+mouse_turn_deg = 70           # homing, degrees per second
+mouse_damage_percent = 12
+belly_s = 2.5
+belly_pull_px = 190           # sideways pull on your ship while a raider shows its belly
+belly_cooldown_s = 9
 score_per_kill = 100
+score_per_mouse = 50
 score_per_raider = 1000
 score_per_second = 5
 
@@ -83,17 +103,20 @@ score_per_second = 5
 name = "Event Horizon"
 music = "event_horizon"
 duration_s = 90
-asteroid_count = 3
+asteroid_count = 4
 asteroid_size_px = [10, 30]
 asteroid_speed_px = [30, 140]
 asteroid_spread_deg = 55
+asteroid_wobble_px = 0
 damage_percent = 25
 score_per_kill = 100
 score_per_second = 12
-hole_chance_per_s = 0.08      # chance per second that a black hole appears (max one at a time)
-hole_first_s = 6
-hole_radius_px = 18           # event horizon: touching it means game over
-hole_pull = 60.0              # drift speed towards the hole = pull / distance^2 (units)
+hole_chance_per_s = 0.12      # chance per second that a black hole appears
+max_holes = 1
+hole_first_s = 5
+hole_radius_px = [12, 24]     # event horizon (random per hole): touching it means game over
+hole_pull = 55.0              # drift speed = pull * (radius / 18 px)^2 / distance^1.5 (units)
+hole_breathe = 0.15           # the horizon slowly swells and shrinks by this share
 hole_speed_px = [40, 90]      # own approach speed on top of the scroll
 
 [level_07]
@@ -102,31 +125,45 @@ music = "mother"
 thrust = false                # the ship stops: boss fight
 mother_width_px = 280
 mother_distance_px = 330      # above the ship
-mother_speed_px = 70          # moves horizontally only
-regen_per_s = 1.0             # her energy regenerates (percent per second)
+mother_speed_px = 80          # sideways speed in phase 1; faster later
+regen_per_s = 0.45            # her energy regenerates (percent per second)
 # damage per weapon for zone 1 / 2 / 3 (outer 30 % / inner 15 % / centre 10 % of the width)
-laser = [5, 10, 20]           # percent per hit
-beam = [10, 20, 30]           # percent per second
-nuke = [20, 40, 60]           # percent per nuke
-shot_interval_s = 4
-shot_damage_percent = 5
+# a simulated pilot with perfect aim (who never dodges) needs about 1.5 / 2.5 / 4 minutes
+laser = [0.3, 0.55, 0.9]      # percent per hit
+beam = [0.9, 1.6, 2.6]        # percent per second
+nuke = [2.0, 4.0, 6.0]        # percent per nuke
+phase_at = [66, 33]           # health at which she enters phase 2 and phase 3
+speed_mult = [1.0, 1.5, 2.1]  # per phase
+shot_interval_s = [3.0, 2.4, 1.8]
+fan_shots = [1, 3, 5]         # shots per volley per phase
+shot_damage_percent = 6
 shot_speed_px = 380
-bomb_first_s = 45
-bomb_interval_s = 120         # artificial black hole bomb, about every two minutes
+mouse_interval_s = [0, 11, 8] # space mouse swarms (0 = none in that phase)
+mouse_count = 3
+lunge_interval_s = [0, 14, 9] # she dives towards you and pulls back
+lunge_px = 120
+intercept_chance = [0.0, 0.25, 0.4]  # she shoots down incoming nukes
+bomb_first_s = 30
+bomb_interval_s = [45, 35, 25]  # artificial black hole bombs
 bomb_speed_px = 260
 hole_life_s = 10
 hole_radius_px = 14
-hole_pull = 35.0
+hole_pull = 45.0
 hole_drain_radius_px = 100
 hole_drain_per_s = 5          # hull percent per second while close
 pulse_first_s = 20
-pulse_interval_s = [25, 35]
-pulse_duration_s = [5, 10]
+pulse_interval_s = [22, 32]
+pulse_duration_s = [4, 7]
 ring_speed_px = 200           # the hypno pulse travels from the mothership to you
 eyes_grace_s = 0.4
-vulnerable_s = 10             # after a pulse she takes 50 % more damage
+vulnerable_s = 8              # after a pulse she takes 50 % more damage
 vulnerable_bonus = 0.5
+escort_phase = 0              # raiders join her from this phase on (0 = never)
+mouse_speed_px = 200
+mouse_turn_deg = 60
+mouse_damage_percent = 10
 score_per_second = 0
+score_per_mouse = 50
 score_victory = 10000
 
 [endless]
@@ -135,3 +172,136 @@ music = "debris"
 start_difficulty = 1.0
 difficulty_per_min = 0.35
 score_per_second = 20
+
+# ---------------------------------------------------------------- MEDIUM
+
+[medium.level_01]
+asteroid_count = 5
+asteroid_speed_px = [40, 170]
+asteroid_spread_deg = 60
+asteroid_wobble_px = 50
+
+[medium.level_02]
+small_count = 5
+large_count = 2
+asteroid_speed_px = [40, 160]
+asteroid_wobble_px = 50
+
+[medium.level_03]
+asteroid_count = [6, 8]
+asteroid_speed_px = [30, 110]
+pulse_duration_s = [4, 5.5]
+pulse_interval_s = [10, 14]
+
+[medium.level_04]
+duration_s = 70
+max_brains = [4, 13]
+brain_spawn_per_s = [2.0, 5.0]
+brain_life_s = [1.5, 7.0]
+brain_seek_px = 30
+damage_percent = 15
+
+[medium.level_05]
+asteroid_count = [2, 3]
+raider_waves = [2, 1]
+raider_toughness = 2.4
+raider_fire_interval_s = [1.1, 2.0]
+mouse_speed_px = 230
+belly_pull_px = 220
+belly_cooldown_s = 7
+
+[medium.level_06]
+asteroid_count = 5
+hole_chance_per_s = 0.16
+max_holes = 2
+hole_radius_px = [12, 30]
+hole_pull = 75.0
+asteroid_wobble_px = 40
+
+[medium.level_07]
+regen_per_s = 0.5
+laser = [0.25, 0.45, 0.75]
+beam = [0.8, 1.4, 2.2]
+nuke = [1.5, 3.0, 5.0]
+shot_interval_s = [2.6, 2.1, 1.5]
+fan_shots = [1, 3, 5]
+mouse_interval_s = [0, 9, 6]
+lunge_interval_s = [0, 11, 7]
+intercept_chance = [0.0, 0.35, 0.5]
+bomb_interval_s = [40, 30, 22]
+pulse_interval_s = [20, 28]
+escort_phase = 3
+
+# ---------------------------------------------------------------- HARD
+
+[hard.level_01]
+asteroid_count = 7
+asteroid_speed_px = [50, 210]
+asteroid_spread_deg = 70
+asteroid_wobble_px = 130
+damage_percent = 30
+
+[hard.level_02]
+small_count = 6
+large_count = 3
+asteroid_speed_px = [50, 190]
+asteroid_wobble_px = 110
+damage_percent = 30
+large_damage_percent = 60
+
+[hard.level_03]
+asteroid_count = [8, 11]
+asteroid_speed_px = [35, 130]
+asteroid_wobble_px = 60
+pulse_duration_s = [5, 7]
+pulse_interval_s = [9, 12]
+pulse_spawns = true
+damage_percent = 30
+
+[hard.level_04]
+duration_s = 80
+max_brains = [5, 16]
+brain_spawn_per_s = [2.5, 6.0]
+brain_life_s = [2.0, 8.0]
+brain_seek_px = 55
+damage_percent = 18
+
+[hard.level_05]
+asteroid_count = [2, 4]
+asteroid_wobble_px = 80
+raider_waves = [2, 2]
+raider_toughness = 2.8
+raider_speed_px = 260
+raider_fire_interval_s = [0.9, 1.7]
+raider_shot_speed_px = 480
+shot_damage_percent = 12
+mouse_speed_px = 260
+mouse_damage_percent = 15
+belly_pull_px = 250
+belly_cooldown_s = 6
+
+[hard.level_06]
+asteroid_count = 6
+hole_chance_per_s = 0.2
+max_holes = 2
+hole_radius_px = [14, 34]
+hole_pull = 95.0
+hole_breathe = 0.22
+asteroid_wobble_px = 90
+damage_percent = 30
+
+[hard.level_07]
+regen_per_s = 0.45
+laser = [0.22, 0.4, 0.66]
+beam = [0.7, 1.2, 2.0]
+nuke = [1.0, 2.5, 4.0]
+speed_mult = [1.2, 1.8, 2.5]
+shot_interval_s = [2.2, 1.7, 1.2]
+fan_shots = [3, 5, 6]
+shot_damage_percent = 7
+mouse_interval_s = [12, 7, 5]
+lunge_interval_s = [16, 9, 6]
+intercept_chance = [0.2, 0.45, 0.6]
+bomb_interval_s = [35, 25, 18]
+pulse_interval_s = [18, 25]
+escort_phase = 2

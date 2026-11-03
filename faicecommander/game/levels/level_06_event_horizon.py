@@ -1,5 +1,6 @@
-"""Level 6 - Event Horizon: like level 1, plus at most one black hole at a time. Its pull drags the
-ship sideways - steer against it. Getting too close means being absorbed: game over."""
+"""Level 6 - Event Horizon: an asteroid field plus black holes of different sizes. The bigger the
+hole, the stronger its pull - and every horizon slowly swells and shrinks. The pull drags the ship
+sideways; steer against it. Touching the event horizon means being absorbed: game over."""
 from .base import Level
 
 
@@ -12,11 +13,12 @@ class EventHorizon(Level):
 
     def spawn(self, dt):
         d, w = self.data, self.world
-        while w.count(1) < d["asteroid_count"]:
-            w.spawn_asteroid(1, d["asteroid_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"],
-                             d["damage_percent"], d["score_per_kill"])
-        if not w.holes and self.elapsed > d["hole_first_s"] and w.rng.random() < d["hole_chance_per_s"] * dt:
+        self.keep_rocks(d["asteroid_count"])
+        if (len(w.holes) < d["max_holes"] and self.elapsed > d["hole_first_s"]
+                and w.rng.random() < d["hole_chance_per_s"] * dt):
             x = w.rng.uniform(-w.half_width * 0.8, w.half_width * 0.8)
-            w.spawn_hole(x, w.top_y + 4, w.u(w.rng.uniform(*d["hole_speed_px"])), w.u(d["hole_radius_px"]),
-                         d["hole_pull"])
+            if any(abs(h.x - x) < 6 and h.y > w.top_y - 6 for h in w.holes):
+                return  # keep a new hole apart from one that has just appeared
+            w.spawn_hole(x, w.top_y + 4, w.u(w.rng.uniform(*d["hole_speed_px"])),
+                         w.u(w.rng.uniform(*d["hole_radius_px"])), d["hole_pull"], breathe=d["hole_breathe"])
             w.emit(("hole_spawn",))

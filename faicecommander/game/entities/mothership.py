@@ -1,29 +1,28 @@
-"""The Mother's dreadnought: stays at the top, moves sideways only, three damage zones, regenerates."""
+"""The Mother's dreadnought: holds the top of the screen, three damage zones, regenerates.
+The level (level_07) drives her phases: faster sideways movement, dives towards you, rage glow."""
+import math
 import threading
-
-from panda3d.core import NodePath
 
 from ...render import models as M
 
 # half widths of the hull along its length (model units at width 14, y towards the player is negative)
 HULL = [(-5.0, 0.12), (-4.3, 0.9), (-2.8, 2.4), (-0.8, 4.6), (1.5, 6.6), (3.6, 7.0), (5.0, 5.0)]
-ZONES = (0.30, 0.15, 0.10)
-BASE_SHADE = 0.55  # outer / inner / centre share of the width per side
+ZONES = (0.30, 0.15, 0.10)  # outer / inner / centre share of the width per side
+BASE_SHADE = 0.55
 
 
 class MothershipModel:
     """Built in a background thread at startup: the model has ~1000 parts and takes a few seconds."""
 
     def __init__(self):
-        self.store = NodePath("mothership-store")
         self.model = None
         self.thread = threading.Thread(target=self._build, name="mothership-builder", daemon=True)
         self.thread.start()
 
     def _build(self):
-        model = M.build_mothership(self.store)
-        model.flattenStrong()
-        self.model = model
+        def build(root):
+            M.build_mothership(root).flattenStrong()
+        self.model = M.cached("mothership", build).getChild(0)
 
     def get(self):
         self.thread.join()
@@ -57,6 +56,9 @@ class Mothership:
         self.vulnerable = 0.0          # seconds of +50 % damage left
         self.bonus = data["vulnerable_bonus"]
         self.flash = 0.0
+        self.speed_mult = 1.0
+        self.rage = 0.0                # 0..1: red glow in her last phase
+        self.t = 0.0
         self.node.setPos(x, y, 0)
 
     def zone(self, x):
@@ -94,19 +96,23 @@ class Mothership:
         return self.health <= 0
 
     def update(self, dt, x_limit):
+        self.t += dt
+        speed = self.speed * self.speed_mult
         if abs(self.goal_x - self.x) < 0.5:
             self.goal_x = self.rng.uniform(-x_limit, x_limit)
-        step = max(-self.speed * dt, min(self.speed * dt, self.goal_x - self.x))
+        step = max(-speed * dt, min(speed * dt, self.goal_x - self.x))
         self.x += step
         self.node.setPos(self.x, self.y, 0)
-        self.node.setR(-step / max(dt, 1e-6) / self.speed * 4)
+        self.node.setR(-step / max(dt, 1e-6) / self.speed * 3)
         self.vulnerable = max(0.0, self.vulnerable - dt)
         if self.health > 0:
             self.health = min(100.0, self.health + self.regen * dt)
         self.flash = max(0.0, self.flash - dt * 4)
         glow = self.flash * 0.6 + (0.35 if self.vulnerable > 0 else 0.0)
+        rage = self.rage * (0.5 + 0.5 * math.sin(self.t * 5.0))
         b = BASE_SHADE  # seen from above the hull catches the key light; keep it dark and menacing
-        self.node.setColorScale(b * (1 + glow), b * (1 + glow * 0.3), b * (1 + glow * (0.8 if self.vulnerable > 0 else 0.1)), 1)
+        self.node.setColorScale(b * (1 + glow + rage * 0.9), b * (1 + glow * 0.3),
+                                b * (1 + glow * (0.8 if self.vulnerable > 0 else 0.1)), 1)
 
     def remove(self):
         self.alive = False

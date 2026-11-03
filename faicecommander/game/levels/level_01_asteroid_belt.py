@@ -1,4 +1,4 @@
-"""Level 1 - Asteroid Belt: always three category 1 asteroids, one hit each, 25 % damage."""
+"""Level 1 - Asteroid Belt: a steady field of category 1 asteroids (3 on easy), one hit each."""
 from .base import Level
 
 
@@ -7,7 +7,4 @@ class AsteroidBelt(Level):
     key = "level_01"
 
     def spawn(self, dt):
-        d = self.data
-        while self.world.count(1) < d["asteroid_count"]:
-            self.world.spawn_asteroid(1, d["asteroid_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"],
-                                      d["damage_percent"], d["score_per_kill"])
+        self.keep_rocks(self.data["asteroid_count"])

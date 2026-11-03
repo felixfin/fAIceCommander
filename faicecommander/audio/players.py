@@ -4,7 +4,9 @@ from panda3d.core import AudioSound, Filename
 from . import cache, sfx_bank, tracks
 
 POOL_SIZES = {"laser": 6, "boom_small": 5, "boom_big": 3, "thud": 3, "crack": 3, "switch": 2, "empty": 2,
-              "splat": 4, "brain_spawn": 4, "enemy_shot": 4, "metal_hit": 4,
+              "splat": 4, "brain_spawn": 4, "enemy_shot": 4, "metal_hit": 4, "meow_1": 3, "meow_2": 3, "meow_3": 3,
+              "mother_meow": 3, "squeak": 4, "mouse_throw": 3, "fw_launch": 4, "fw_burst": 5, "weld": 2,
+              "servo": 2, "thunder": 2,
               "sonar_l2": 2, "sonar_l1": 2, "sonar_c": 2, "sonar_r1": 2, "sonar_r2": 2}
 LOOPS = {"beam": "beam_loop", "shield": "shield_loop", "hypno": "hypno_loop", "blackhole": "blackhole_loop"}
 

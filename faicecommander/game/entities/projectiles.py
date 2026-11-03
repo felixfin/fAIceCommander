@@ -1,4 +1,6 @@
-"""Laser pulses and nuclear rockets."""
+"""Laser pulses, nuclear rockets and the Mother's flak."""
+import math
+
 import numpy as np
 from panda3d.core import NodePath
 
@@ -70,6 +72,34 @@ class Nuke:
     @property
     def expired(self):
         return self.t >= self.fuse
+
+    def remove(self):
+        self.alive = False
+        self.node.removeNode()
+
+
+class Flak:
+    """The Mother's point-defence shot: chases a nuke and sets it off when it gets there."""
+    radius = 0.2
+
+    def __init__(self, parent, raider_template, x, y, target, speed):
+        self.node = raider_template.shot.copyTo(parent)
+        self.node.setScale(1.4)
+        self.x, self.y, self.target, self.speed = x, y, target, speed
+        self.alive = True
+
+    @property
+    def reached(self):
+        return math.hypot(self.target.x - self.x, self.target.y - self.y) < self.radius + self.target.radius + 0.2
+
+    def update(self, dt):
+        dx, dy = self.target.x - self.x, self.target.y - self.y
+        d = max(math.hypot(dx, dy), 1e-6)
+        step = min(d, self.speed * dt)
+        self.x += dx / d * step
+        self.y += dy / d * step
+        self.node.setH(math.degrees(math.atan2(-dx, dy)))
+        self.node.setPos(self.x, self.y, 0.15)
 
     def remove(self):
         self.alive = False

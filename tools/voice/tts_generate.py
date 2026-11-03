@@ -23,15 +23,17 @@ VOICES = HERE / "models"
 OUT = HERE / "raw"
 OUT.mkdir(exist_ok=True)
 
-# id: (voice, spoken text, length_scale)  -- length_scale > 1 is slower; "//" marks a long pause
+# id: (voice, spoken text, length_scale)  -- length_scale > 1 is slower; "//" marks a long pause;
+# [[ ... ]] passes phonemes straight to the voice (for names it would otherwise slur)
 PAUSE_SENTENCE, PAUSE_LONG = 0.32, 0.75
+NATHANIEL = "[[ nəθˈænjəl ]]"
 LINES = {
     "intro_01": ("norman", "For centuries, humanity has been at war with the Catliens.", 1.18),
     "intro_02": ("norman", "Feline. Brilliant. Merciless. Their swarms have burned world after world.", 0.98),
-    "intro_03": ("norman", "Most of us are slaves now. // Pets of the higher castes.", 1.15),
+    "intro_03": ("norman", "Most of us are slaves now: pets, of the higher castes.", 1.12),
     "intro_04": ("norman", "They neuter the males. They milk the females.", 1.15),
     "intro_05": ("norman", "One mind steers the swarm: the Mother. Destroy her, and the swarm falls into chaos.", 1.12),
-    "intro_06": ("norman", "Commander James Nathaniel Honor found her. His fleet struck hard.", 1.08),
+    "intro_06": ("norman", f"Commander James {NATHANIEL} Honor found her. His fleet struck hard.", 1.08),
     "intro_07": ("norman", "Her hyperdrive failed. // But his fleet was lost.", 1.1),
     "intro_08": ("kristin", "Only the head, and part of the torso, could be saved.", 1.0),
     "intro_09": ("norman", "We built him a ship from the wreckage. There is nothing left for another attempt.", 1.12),
@@ -40,7 +42,7 @@ LINES = {
     "outro_01": ("norman", "The Mother is dead.", 1.25),
     "outro_02": ("norman", "Across the galaxy, the swarm loses its mind.", 1.15),
     "outro_03": ("norman", "On a thousand worlds, the collars fall.", 1.15),
-    "outro_04": ("john", "My name is. // James Nathaniel Honor.", 1.15),
+    "outro_04": ("john", f"My name is Honor. // James {NATHANIEL} Honor.", 1.12),
 }
 FILES = {"norman": "en_US-norman-medium", "kristin": "en_US-kristin-medium",
          "ljspeech": "en_US-ljspeech-high", "john": "en_US-john-medium"}

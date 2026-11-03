@@ -1,6 +1,7 @@
 """Procedural sound effects. Each function returns a mono float array at synth.SR."""
 import numpy as np
 
+from . import cats, cinema_sfx
 from .synth import SR, bp, hp, lp, noise, reverb, rng, saw, sine, square, sweep_lp, t_arr
 
 
@@ -135,14 +136,6 @@ def siren():
     return _norm(reverb(s, 0.35), 0.6)
 
 
-def hypno_loop():
-    """2 s seamless loop while a pulse is active: slow beating drone."""
-    t = t_arr(2.0)
-    s = sine(110, t) + sine(110.5 * 2, t) * 0.5 + sine(165, t) * 0.4 + sine(55, t) * 0.6
-    s *= 0.7 + 0.3 * sine(1.5, t)
-    return _norm(s, 0.4)
-
-
 def sonar(pan):
     """Stereo sonar ping; pan -1 (left) .. 1 (right)."""
     t = t_arr(0.5)
@@ -208,15 +201,23 @@ SFX = {
     "shield_off": shield_off, "boom_small": lambda: explosion(0.8), "boom_big": lambda: explosion(1.5),
     "thud": thud, "nuke_launch": nuke_launch, "nuke_boom": nuke_boom, "crack": crack, "switch": switch,
     "empty": empty, "beep": beep, "beep_high": lambda: beep(1320, 0.22), "chime": chime, "game_over": game_over,
-    "alarm": alarm, "siren": siren, "hypno_loop": hypno_loop, "freeze": freeze, "splat": splat,
+    "alarm": alarm, "siren": siren, "hypno_loop": cats.hypno_loop, "freeze": freeze, "splat": splat,
     "brain_spawn": brain_spawn, "enemy_shot": enemy_shot, "metal_hit": metal_hit, "blackhole_loop": blackhole_loop,
     "absorbed": absorbed,
     "sonar_l2": lambda: sonar(-0.9), "sonar_l1": lambda: sonar(-0.45), "sonar_c": lambda: sonar(0.0),
     "sonar_r1": lambda: sonar(0.45), "sonar_r2": lambda: sonar(0.9),
+    # Catliens and their mice (audio/cats.py)
+    "meow_1": lambda: cats.angry_meow(1), "meow_2": lambda: cats.angry_meow(2), "meow_3": lambda: cats.angry_meow(3),
+    "mother_meow": cats.mother_meow, "mother_roar": cats.mother_roar, "mother_scream": cats.mother_scream,
+    "mother_death": cats.mother_death, "hypno_scream": cats.hypno_scream, "squeak": cats.squeak,
+    "mouse_throw": cats.mouse_throw, "purr_growl": cats.purr_growl,
+    **cinema_sfx.SFX,
 }
 
 
-def render_all(seed=7):
-    rng(seed)
-    np.random.seed(seed)
-    return {name: fn() for name, fn in SFX.items()}
+def render(name, seed=7):
+    """One effect, seeded per name so that each sounds the same on every machine."""
+    k = seed + sum(ord(c) * (i + 1) for i, c in enumerate(name))
+    rng(k)
+    np.random.seed(k % 2 ** 32)
+    return SFX[name]()

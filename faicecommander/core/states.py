@@ -1,8 +1,10 @@
 """Game states. Each gets update(dt, face, ctl) every frame while active; on_escape() handles Esc."""
+import math
+
 from ..cutscenes.intro import make_intro
 from ..cutscenes.outro import make_outro
 from ..game.hypno import PULSE, WARNING
-from ..game.levels import LEVELS
+from ..game.levels import DIFFICULTIES, LEVELS
 from ..input.gestures import Calibrator
 
 VOID_LAYERS = {"pad": 1.0, "sonar": 0.8}
@@ -37,6 +39,7 @@ class _CutsceneState(State):
     def enter(self):
         self.app.hud.message()
         self.app.hud.set_menu([], 0)
+        self.app.cinema.show(True)
         self.scene = type(self).make(self.app)
         self.scene.start()
         self.held = 0.0
@@ -57,6 +60,7 @@ class _CutsceneState(State):
 
     def exit(self):
         self.scene.finish()
+        self.app.cinema.show(False)
         self.app.hypno_alpha = 0.0
 
 
@@ -77,6 +81,60 @@ class OutroState(_CutsceneState):
 
 
 # ---------------------------------------------------------------- menus
+
+class LoadingState(State):
+    """First start: the sound effects and the menu/intro music are synthesized and the Mother's ship
+    is built in the background. Shows a progress bar and a slowly turning ship until that is done."""
+
+    def enter(self):
+        app = self.app
+        from ..render import models as M
+        from ..render.hud import Bar
+        self.t = 0.0
+        app.hud.show_game_hud(False)
+        app.world.root.hide()
+        app.backdrop.set_visible(True)
+        self.root = app.render.attachNewNode("loading")
+        self.ship = M.cached("ship", M.build_ship).getChild(0).copyTo(self.root)
+        self.ship.setPos(0, 3.5, 0.5)
+        self.ship.setScale(1.4)
+        self.bar = Bar(app.hud.center, -0.6, -0.25, 1.2, 0.04, (1, 0.45, 0.85, 1), segments=50)
+        app.hud.message("fAIceCommander 3D", "Preparing the soundtrack (first start only)", "")
+        app.hud.title.setZ(0.42)
+        app.hud.subtitle.setZ(0.3)
+        app.hud.hint.setZ(-0.34)
+
+    @property
+    def done(self):
+        b = self.app.audio.builder
+        return (b.startup_ready or b.error is not None) and self.app.world.mother_model.model is not None
+
+    def update(self, dt, face, ctl):
+        self.t += dt
+        b = self.app.audio.builder
+        mother = 0.0 if self.app.world.mother_model.model is None else 1.0
+        self.bar.set(0.92 * b.startup_progress + 0.08 * mother)
+        self.app.hud.hint.setText(b.status or ("building the Mother's ship" if not mother else "ready"))
+        self.ship.setH(self.t * 25)
+        self.ship.setR(8 * math.sin(self.t * 0.9))
+        if self.done and self.t > 0.3:
+            app = self.app
+            app.change(IntroState if app.cfg.get("display.play_intro", True) else MenuState)
+
+    def on_escape(self):
+        self.app.userExit()
+
+    def exit(self):
+        hud = self.app.hud
+        self.root.removeNode()
+        self.bar.node.removeNode()
+        hud.title.setZ(0.08)
+        hud.subtitle.setZ(-0.02)
+        hud.hint.setZ(-0.1)
+        hud.hint.setText("")
+        hud.message()
+        self.app.world.root.show()
+
 
 class CalibrationState(State):
     STEPS = (("neutral", "Look straight into the camera", "Keep your head upright and your mouth closed", 2.5),
@@ -127,7 +185,7 @@ class MenuState(State):
         app = self.app
         self.t = 0.0
         self.page = "main"
-        self.sel = 0
+        self.sel = 1  # MEDIUM
         app.hud.show_game_hud(False)
         app.world.root.hide()
         app.backdrop.set_visible(True)
@@ -138,11 +196,13 @@ class MenuState(State):
     def items(self):
         app = self.app
         if self.page == "practice":
-            return [(f"LEVEL {cls.number} · {app.levels_cfg[cls.key]['name'].upper()}", True,
+            return [(f"DIFFICULTY · {app.difficulty.upper()}", True, self._cycle_difficulty)] + \
+                   [(f"LEVEL {cls.number} · {app.levels_cfg[cls.key]['name'].upper()}", True,
                      lambda i=i: app.start_run("practice", i)) for i, cls in enumerate(LEVELS)] + \
                    [("BACK", True, self._main)]
         return [("EASY · retry the level you fail", True, lambda: app.start_run("easy")),
-                ("HARD · one life, from level 1", True, lambda: app.start_run("hard")),
+                ("MEDIUM · tougher, retry the level you fail", True, lambda: app.start_run("medium")),
+                ("HARD · much tougher, one life from level 1", True, lambda: app.start_run("hard")),
                 ("ENDLESS", app.save.endless_unlocked, lambda: app.start_run("endless")),
                 ("PRACTICE A LEVEL", True, self._practice),
                 ("HIGHSCORES", True, lambda: app.change(HighscoreState)),
@@ -151,10 +211,14 @@ class MenuState(State):
                 ("QUIT", True, app.userExit)]
 
     def _practice(self):
-        self.page, self.sel = "practice", 0
+        self.page, self.sel = "practice", 1
+
+    def _cycle_difficulty(self):
+        app = self.app
+        app.difficulty = DIFFICULTIES[(DIFFICULTIES.index(app.difficulty) + 1) % len(DIFFICULTIES)]
 
     def _main(self):
-        self.page, self.sel = "main", 3
+        self.page, self.sel = "main", 4
 
     def _draw(self):
         hint = "Turn your head to choose · open your mouth to start" if self.app.tracker_ok else \
@@ -205,7 +269,7 @@ class HighscoreState(State):
         app.hud.message("HIGHSCORES", "", "")
         app.hud.title.setZ(0.42)
         cols = []
-        for mode in ("easy", "hard", "endless"):
+        for mode in ("easy", "medium", "hard", "endless"):
             rows = [f"{mode.upper()}", ""]
             table = app.save.top(mode)
             rows += [f"{i + 1:2d}. {e['name']:<12} {e['score']:>8d}  {e['level']}" for i, e in enumerate(table)]
@@ -285,11 +349,15 @@ class NameEntryState(State):
 class PlayState(State):
     BOOMS = ((2.5, "nuke_boom", 1.0), (1.3, "boom_big", 0.9), (0.0, "boom_small", 0.7))
     SIMPLE_SFX = {"empty": ("empty", 1.0), "switch": ("switch", 1.0), "split": ("crack", 1.0),
-                  "nuke_launch": ("nuke_launch", 1.0), "enemy_shot": ("enemy_shot", 0.5),
-                  "metal_hit": ("metal_hit", 0.6), "brain_spawn": ("brain_spawn", 0.22),
-                  "hypno_warning": ("siren", 0.9), "frozen": ("freeze", 0.9), "absorbed": ("absorbed", 1.0),
-                  "mother_hit": ("metal_hit", 0.5), "bomb": ("nuke_launch", 0.6), "hole_formed": ("absorbed", 0.5),
-                  "hole_collapse": ("boom_small", 0.6)}
+                  "nuke_launch": ("nuke_launch", 1.0), "metal_hit": ("metal_hit", 0.6),
+                  "brain_spawn": ("brain_spawn", 0.22), "hypno_warning": ("siren", 0.9), "frozen": ("freeze", 0.9),
+                  "absorbed": ("absorbed", 1.0), "mother_hit": ("metal_hit", 0.5), "bomb": ("nuke_launch", 0.6),
+                  "hole_formed": ("absorbed", 0.5), "hole_collapse": ("boom_small", 0.6),
+                  "mouse_throw": ("mouse_throw", 0.7), "squeak": ("squeak", 0.8), "belly": ("purr_growl", 1.0),
+                  "flak": ("enemy_shot", 0.6), "mother_roar": ("mother_roar", 1.0),
+                  "mother_scream": ("mother_scream", 0.9), "hypno_start": ("hypno_scream", 0.9)}
+    BANNERS = {"wave": ("", "Another wave of raiders"), "intercepted": ("", "Nuke intercepted!"),
+               "mother_phase": None}
 
     def enter(self):
         app = self.app
@@ -303,6 +371,7 @@ class PlayState(State):
         self.lost = 0.0
         self.paused = False
         self.low_hull = False
+        self.banner_until = 3.0  # the level title shows for the first seconds
         app.audio.music.play(self.level.music, self._layers(intro=True))
 
     @property
@@ -328,7 +397,7 @@ class PlayState(State):
             return
         app.hud.set_warning("")
         self.t += dt
-        if self.t > 3.0:
+        if self.t > self.banner_until:
             app.hud.message()
         for ev in self.level.update(dt, ctl):
             self._on_event(ev)
@@ -392,6 +461,20 @@ class PlayState(State):
         if kind in self.SIMPLE_SFX:
             name, vol = self.SIMPLE_SFX[kind]
             sfx.play(name, vol)
+        if kind in self.BANNERS:
+            title, sub = self.BANNERS[kind] or (f"PHASE {ev[1]}", "She is enraged!" if ev[1] == 3 else "She is angry")
+            app.hud.message(title, sub, "")
+            self.banner_until = self.t + 2.5
+            if kind == "mother_phase":
+                app.flash.trigger(0.6, (1.0, 0.2, 0.15))
+                app.shake(1.2)
+                sfx.play("mother_roar", 1.0)
+        if kind == "enemy_shot":  # Catliens yowl when they fire
+            if ev[1] == "mother":
+                sfx.play("mother_meow", 0.8, rate=0.9 + 0.2 * app.world.rng.random())
+            else:
+                sfx.play(f"meow_{int(app.world.rng.integers(1, 4))}", 0.75, rate=0.92 + 0.16 * app.world.rng.random())
+            sfx.play("enemy_shot", 0.35)
         elif kind == "laser":
             sfx.play("laser", 0.55, rate=0.95 + 0.1 * app.world.rng.random())
         elif kind == "shield":
@@ -423,6 +506,7 @@ class PlayState(State):
             app.flash.trigger(0.9, (1.0, 0.9, 0.8))
             app.shake(1.6)
             sfx.play("nuke_boom")
+            sfx.play("mother_death", 1.0)
 
     def on_escape(self):
         self.app.end_run()
@@ -465,7 +549,7 @@ class GameOverState(_EndState):
         cause = {"absorbed": "Absorbed by the black hole", "drained": "Drained by the black hole"}.get(
             w.death_cause, "Hull destroyed")
         self.sub = cause + " · score {score}"
-        self.retry = app.mode in ("easy", "practice")
+        self.retry = app.mode in ("easy", "medium", "practice")
         self.hint = ("Open your mouth or press SPACE to retry this level · Esc ends the run" if self.retry else
                      "Open your mouth or press SPACE to continue")
         w.ship.node.hide()

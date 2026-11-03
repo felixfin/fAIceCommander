@@ -3,13 +3,55 @@
 All geometry is generated in code - no external assets, no licensing issues.
 Coordinate system (Panda3D): X right, Y forward (= up the screen), Z up.
 """
+import hashlib
 import math
+import os
+from pathlib import Path
 
 import numpy as np
 from panda3d.core import (
-    ColorBlendAttrib, CardMaker, Material, Point3, Geom, GeomNode, GeomTriangles, GeomVertexData,
-    GeomVertexFormat, GeomVertexWriter, NodePath, PNMImage, Texture, TransparencyAttrib,
+    ColorBlendAttrib, CardMaker, Filename, Loader, LoaderOptions, Material, Point3, Geom, GeomNode, GeomTriangles,
+    GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath, PNMImage, Texture, TransparencyAttrib,
 )
+
+
+# ---------------------------------------------------------------- model cache
+
+def _source_hash():
+    """Changes whenever the model code changes, so stale cached models are never used."""
+    pkg = Path(__file__).resolve().parents[1]
+    h = hashlib.md5()
+    for p in sorted(list((pkg / "render").glob("*.py")) + list((pkg / "game" / "entities").glob("*.py"))):
+        h.update(p.read_bytes())
+    return h.hexdigest()[:12]
+
+
+def _cache_dir():
+    base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / ".cache")
+    d = base / "fAIceCommander3D" / "models" / _source_hash()
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def cached(name, build):
+    """A model tree built by build(root) - loaded from the per-user cache (.bam) when it is there.
+    Building the procedural models takes seconds; loading them takes milliseconds."""
+    path = _cache_dir() / f"{name}.bam"
+    if path.exists():
+        node = Loader.getGlobalPtr().loadSync(Filename.fromOsSpecific(str(path)), LoaderOptions(LoaderOptions.LF_no_cache))
+        if node is not None:
+            root = NodePath(node)
+            root.setName(name)
+            return root
+    root = NodePath(name)
+    build(root)
+    tmp = path.with_name(f"{name}.{os.getpid()}.tmp")
+    if root.writeBamFile(Filename.fromOsSpecific(str(tmp))):
+        try:
+            tmp.replace(path)
+        except OSError:  # another instance was faster
+            tmp.unlink(missing_ok=True)
+    return root
 
 
 # ---------------------------------------------------------------- mesh core
@@ -318,33 +360,63 @@ def build_brain(parent, scale=1.0, aura=True):
     return root
 
 
-def asteroid_mesh(seed, radius, irregular=0.35, sub=2, base=(0.47, 0.43, 0.39)):
+# rock types: (dark, light, accent) - basalt, iron-rich, carbonaceous, dirty ice
+ROCK_TYPES = [((0.13, 0.12, 0.115), (0.42, 0.4, 0.37), (0.6, 0.58, 0.52)),
+              ((0.16, 0.08, 0.05), (0.5, 0.3, 0.2), (0.75, 0.45, 0.25)),
+              ((0.07, 0.065, 0.07), (0.26, 0.25, 0.26), (0.55, 0.5, 0.42)),
+              ((0.2, 0.24, 0.28), (0.55, 0.62, 0.68), (0.8, 0.88, 0.95))]
+
+
+def asteroid_mesh(seed, radius, irregular=0.45, sub=3, base=None):
+    """A lumpy rock with craters (bowls with raised rims), ridges and a rock-type palette.
+    base: a ROCK_TYPES entry (or None to pick one by seed). Returns V, F, vcol (per-vertex colour
+    function for part(..., vcol=...)) and the displacement."""
     rng = np.random.default_rng(seed)
     V, F = icosphere(sub)
     d = np.zeros(len(V))
-    for _ in range(14):
+    for _ in range(14):  # large lumps and dents
         dv = rng.normal(size=3)
         dv /= np.linalg.norm(dv)
         amp = rng.uniform(-1, 0.6) * irregular
         w = rng.uniform(0.08, 0.35)
         d += amp * np.exp(-(1 - V @ dv) / w)
-    d = np.clip(d, -0.45, 0.6)
-    V = V * (1 + d)[:, None] * radius * rng.uniform(0.75, 1.25, size=3)
-    cols = []
-    for f in F:
-        k = 0.85 + 0.6 * d[list(f)].mean() + rng.uniform(-0.07, 0.07)
-        cols.append(tuple(np.clip(np.array(base) * k, 0, 1)))
-    return V, F, cols, d
+    for _ in range(22):  # smaller knobs and chips
+        dv = rng.normal(size=3)
+        dv /= np.linalg.norm(dv)
+        d += rng.uniform(-0.12, 0.1) * np.exp(-(1 - V @ dv) / rng.uniform(0.01, 0.05))
+    crater = np.zeros(len(V))
+    for _ in range(int(rng.integers(4, 9))):  # impact craters
+        dv = rng.normal(size=3)
+        dv /= np.linalg.norm(dv)
+        r = rng.uniform(0.18, 0.5)
+        ang = np.arccos(np.clip(V @ dv, -1, 1)) / r
+        bowl = np.where(ang < 1, -(1 - ang ** 2), 0.0)
+        rim = np.exp(-((ang - 1.05) / 0.18) ** 2) * 0.35
+        k = rng.uniform(0.14, 0.24) * r * 2
+        d += (bowl + rim) * k
+        crater = np.maximum(crater, np.where(ang < 1, 1 - ang, 0.0))
+    d += 0.025 * np.sin(V @ rng.normal(size=3) * 9) * np.sin(V @ rng.normal(size=3) * 13)  # fine ridges
+    d = np.clip(d, -0.5, 0.6)
+    V = V * (1 + d)[:, None] * radius * rng.uniform(0.68, 1.3, size=3)
+    lo, hi, accent = map(np.array, base or ROCK_TYPES[seed % len(ROCK_TYPES)])
+    vc = {}
+    for i, p in enumerate(V):
+        t = np.clip(0.5 + 1.5 * d[i] + 0.12 * _noise(p, 3.0 / max(radius, 1e-3)), 0, 1)
+        c = (lo + (hi - lo) * t) * (1 - 0.5 * crater[i])        # dark crater floors
+        if rng.random() < 0.012:                                # rare mineral glints
+            c = c * 0.4 + accent * 0.6
+        vc[tuple(np.round(p, 5))] = tuple(np.clip(c, 0, 1))
+    return V, F, (lambda p: vc[tuple(np.round(p, 5))]), d
 
 
 def build_asteroid(parent, seed, radius, category=1):
     root = parent.attachNewNode("asteroid")
     if category == 1:
-        V, F, cols, _ = asteroid_mesh(seed, radius)
-        part(root, V, F, cols)
+        V, F, vcol, _ = asteroid_mesh(seed, radius)
+        part(root, V, F, (1, 1, 1), vcol=vcol)
     else:
-        V, F, cols, d = asteroid_mesh(seed, radius, irregular=0.45, base=(0.42, 0.33, 0.3))
-        part(root, V, F, cols)
+        V, F, vcol, d = asteroid_mesh(seed, radius, irregular=0.55, base=ROCK_TYPES[1])
+        part(root, V, F, (1, 1, 1), vcol=vcol)
         # glowing fracture lines: it will burst into category-1 fragments when shot
         rng = np.random.default_rng(seed + 99)
         planes = [rng.normal(size=3) for _ in range(2)]
@@ -518,13 +590,16 @@ def paint(lo, hi, z0, z1, grime=0.12, soot_y=None):
 ORANGE_LO, ORANGE_HI = (0.32, 0.11, 0.035), (0.93, 0.47, 0.14)
 METAL_LO, METAL_HI = (0.09, 0.09, 0.1), (0.38, 0.38, 0.4)
 
-SHIP_HULL = [(2.25, 0.02, 0.02, 0.03, 2.0), (2.0, 0.2, 0.13, 0.04, 2.6), (1.5, 0.42, 0.25, 0.05, 3.0),
-             (0.8, 0.6, 0.34, 0.05, 3.2), (-0.4, 0.66, 0.36, 0.04, 3.2), (-1.2, 0.6, 0.33, 0.02, 3.0),
-             (-1.42, 0.5, 0.28, 0.0, 2.8), (-1.48, 0.42, 0.22, 0.0, 2.6)]
+# a blunt, armoured salvage hull: rounded-box sections, no pointed nose
+SHIP_HULL = [(2.02, 0.26, 0.15, 0.04, 3.2), (1.96, 0.46, 0.26, 0.05, 3.8), (1.75, 0.58, 0.33, 0.05, 4.0),
+             (1.1, 0.64, 0.36, 0.05, 3.8), (-0.4, 0.68, 0.37, 0.04, 3.6), (-1.2, 0.63, 0.34, 0.02, 3.3),
+             (-1.42, 0.53, 0.29, 0.0, 3.0), (-1.48, 0.45, 0.23, 0.0, 2.8)]
+SHIP_PROW = 2.02
 
 
-def build_ship(parent):
-    """FaceCommander: a rounded salvage gunship with the 2D sprite's silhouette (hull, pods, swept fins)."""
+def build_ship(parent, brain=True):
+    """FaceCommander: a blunt, armoured salvage gunship (hull, two gun pods, stubby radiator wings).
+    brain=False leaves the cockpit dome empty (the intro builds the commander into it)."""
     root = parent.attachNewNode("ship")
     V, F = sweep(SHIP_HULL, 36)
     part(root, V, F, (1, 1, 1), orient=None, vcol=paint(ORANGE_LO, ORANGE_HI, -0.36, 0.36, soot_y=-1.15))
@@ -535,8 +610,22 @@ def build_ship(parent):
         if len(ring) > 3:
             Vr, Fr = tube_mesh(ring, 0.012, 6)
             part(root, Vr, Fr, (0.18, 0.07, 0.03), orient=None)
-    pod = [(1.25, 0.04, 0.04, 0, 2.0), (1.15, 0.17, 0.19, 0, 2.6), (0.6, 0.22, 0.24, 0, 2.8),
-           (-1.3, 0.24, 0.25, 0, 2.8), (-1.55, 0.2, 0.21, 0, 2.6), (-1.6, 0.14, 0.15, 0, 2.4)]
+    # armour: a front ram bar and a glowing sensor slit across the blunt nose
+    Vb, Fb = sweep([(-0.5, 0.06, 0.07, 0, 2.6), (0.5, 0.06, 0.07, 0, 2.6)], 12, "x")
+    part(root, Vb, Fb, (1, 1, 1), pos=(0, 2.02, -0.08), orient=None, vcol=paint(METAL_LO, METAL_HI, -0.15, 0.0))
+    for x in (-0.38, 0.38):
+        Vs, Fs = box(0.08, 0.2, 0.1)
+        part(root, Vs, Fs, (0.14, 0.14, 0.15), pos=(x, 1.94, -0.08), smooth=None)
+    Vs, Fs = box(0.6, 0.02, 0.035)
+    part(root, Vs, Fs, (1.0, 0.75, 0.3), pos=(0, 2.0, 0.1), unlit=True, smooth=None)
+    glow(root, (0, 2.05, 0.1), 0.5, (1.0, 0.6, 0.2, 0.5))
+    for y, w in ((1.55, 0.52), (1.25, 0.56)):  # bolted armour plates on the upper nose
+        for sgn in (1, -1):
+            Vp, Fp = box(w * 0.42, 0.22, 0.02)
+            part(root, Vp, Fp, (1, 1, 1), pos=(sgn * w * 0.25, y, top(sgn * w * 0.25, y) + 0.005),
+                 hpr=(0, 0, -sgn * 14), vcol=paint(ORANGE_LO, ORANGE_HI, -0.2, 0.5, grime=0.3), smooth=None)
+    pod = [(1.25, 0.12, 0.13, 0, 3.0), (1.18, 0.2, 0.22, 0, 3.4), (0.6, 0.23, 0.25, 0, 3.2),
+           (-1.3, 0.25, 0.26, 0, 3.0), (-1.55, 0.21, 0.22, 0, 2.8), (-1.6, 0.15, 0.16, 0, 2.5)]
     Vi, Fi = icosphere(2)
     for sgn in (1, -1):
         px = sgn * 0.98
@@ -545,14 +634,14 @@ def build_ship(parent):
              vcol=paint(METAL_LO, METAL_HI, -0.25, 0.25, soot_y=-1.3))
         Vy, Fy = sweep([(sgn * 0.5, 0.45, 0.07, 0, 2.5, -0.15), (sgn * 0.85, 0.4, 0.06, 0, 2.5, -0.2)], 20, "x")
         part(root, Vy, Fy, (1, 1, 1), pos=(0, 0, -0.02), orient=None, vcol=paint(METAL_LO, METAL_HI, -0.07, 0.07))
-        fin = [(sgn * 1.15, 0.5, 0.075, -0.08, 2.2, -0.75), (sgn * 1.75, 0.3, 0.045, -0.24, 2.2, -1.1),
-               (sgn * 1.97, 0.17, 0.03, -0.3, 2.2, -1.25)]
+        fin = [(sgn * 1.15, 0.48, 0.08, -0.08, 3.6, -0.55), (sgn * 1.6, 0.44, 0.06, -0.16, 3.6, -0.62),
+               (sgn * 1.78, 0.4, 0.05, -0.2, 3.4, -0.66)]  # stubby radiator wing, square tip
         Vf, Ff = sweep(fin, 24, "x")
         part(root, Vf, Ff, (1, 1, 1), orient=None, vcol=paint(ORANGE_LO, ORANGE_HI, -0.33, -0.0, grime=0.18))
         for k in range(3):  # hazard chevrons near the fin root
             Vs, Fs = box(0.09, 0.3, 0.012)
             part(root, Vs, Fs, (0.95, 0.75, 0.1) if k % 2 == 0 else (0.06, 0.06, 0.06),
-                 pos=(sgn * (1.3 + k * 0.1), -0.8 - k * 0.05, -0.03 - k * 0.025), hpr=(sgn * 40, 0, -sgn * 15),
+                 pos=(sgn * (1.3 + k * 0.1), -0.62, -0.06 - k * 0.025), hpr=(sgn * 40, 0, -sgn * 10),
                  smooth=None)
         # laser cannon in the pod nose, green muzzle (2D original)
         Vc, Fc = lathe([(0.0, 0.62), (0.05, 0.6), (0.06, 0.45), (0.06, 0.0), (0.09, -0.05)], 14, "y")
@@ -587,8 +676,9 @@ def build_ship(parent):
                  vcol=lambda p, a=a, ln=ln: (1.0, 0.85 - 0.3 * (-p[1] / ln), 0.4 - 0.3 * (-p[1] / ln), a * (1 + p[1] / ln)))
         glow(root, (x, -1.75, 0), 0.5, (1.0, 0.8, 0.35, 0.9))
     # cockpit: the commander's brain under a glass dome, fed by a life-support tank
-    build_brain(root, 0.24, aura=False).setPos(0, 0.55, 0.47)
-    glow(root, (0, 0.55, 0.5), 0.65, (1.0, 0.4, 0.7, 0.4))
+    if brain:
+        build_brain(root, 0.24, aura=False).setPos(0, 0.55, 0.47)
+        glow(root, (0, 0.55, 0.5), 0.65, (1.0, 0.4, 0.7, 0.4))
     Vh, Fh = hemisphere(3)
     part(root, Vh * np.array([0.36, 0.44, 0.3]), Fh, (0.6, 0.95, 1.0, 0.26), pos=(0, 0.55, 0.37),
          alpha=True, two_sided=True)
@@ -684,7 +774,7 @@ def build_catlien(parent, scale=1.0, queen=False):
             Vk, Fk = lathe([(0.025, 0), (0.0, 0.32 + 0.12 * (k % 2))], 6, "z")
             part(root, Vk, Fk, (0.45, 0.32, 0.12), pos=p, hpr=(0, 0, math.degrees(math.cos(a)) * 0.0), orient="z")
         Vt, Ft = sweep([(-0.2, 0.9, 0.12, 0, 3), (1.9, 0.6, 0.08, 0, 3)], 16, "y")
-        throne = part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(0, 2))
+        throne = part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(0, 2), name="throne")
         throne.setP(90)
         throne.setPos(0, 0.45, -0.1)
     root.setScale(scale)
@@ -731,6 +821,13 @@ def build_fighter(parent):
         Vn, Fn = lathe([(0.12, 1.15), (0.16, 1.3), (0.2, 1.42)], 16, "y")
         part(root, Vn, Fn, (0.08, 0.08, 0.09), pos=(sgn * 0.32, 0, 0), orient="y", two_sided=True)
         glow(root, (sgn * 0.32, 1.45, 0), 0.55, (1.0, 0.2, 0.05, 0.9))
+    # belly emitter (seen only when the raider rolls over): a ribbed disc with a violet core
+    Vd, Fd = lathe([(0.0, -0.26), (0.32, -0.25), (0.38, -0.2)], 28, "z")
+    part(root, Vd, Fd, (0.14, 0.1, 0.12), pos=(0, 0.35, 0), orient=None, two_sided=True)
+    for k in range(3):
+        Vr, Fr = annulus(0.1 + k * 0.08, 0.13 + k * 0.08, 28, 2, z=-0.265)
+        part(root, Vr, Fr, (1.0, 0.4, 0.95), pos=(0, 0.35, 0), unlit=True, orient=None, two_sided=True)
+    glow(root, (0, 0.35, -0.3), 0.7, (1.0, 0.35, 0.95, 0.8))
     # command pod: red-lit canopy with the Catlien pilot inside
     build_catlien(root, 0.15, queen=False).setPos(0, -1.74, 0.2)
     glow(root, (0, -1.5, 0.36), 0.5, (1.0, 0.08, 0.04, 0.55))  # red backlight: pilot reads as a silhouette
@@ -739,6 +836,50 @@ def build_fighter(parent):
          alpha=True, two_sided=True)
     Vr, Fr = lathe([(1.0, 0.0), (1.06, 0.02), (1.0, 0.045)], 28, "z")  # canopy rim
     part(root, Vr, Fr, (0.07, 0.07, 0.07), pos=(0, -1.75, 0.255), scale=(0.21, 0.32, 1), orient="z")
+    return root
+
+
+def build_tractor_beam(parent):
+    """The raider's belly pull: a pink-violet cone along -y, 1 unit long (scaled to the distance)."""
+    root = parent.attachNewNode("tractor")
+    for r0, r1, a in ((0.18, 0.9, 0.22), (0.08, 0.45, 0.35)):
+        V, F = lathe([(r0, 0.0), (r1, -1.0)], 20, "y")
+        part(root, V, F, (1, 1, 1), additive=True, orient=None,
+             vcol=lambda p, a=a: (1.0, 0.35 + 0.3 * (-p[1]), 0.95, a * (0.35 + 0.65 * (1 + p[1]))))
+    for k in range(6):  # rings travelling along the cone read as "pulling"
+        y = -(k + 0.5) / 6
+        V, F = annulus(0.9 * 0.18 + (0.9 - 0.18) * -y - 0.03, 0.18 + (0.9 - 0.18) * -y, 32, 2)
+        part(root, V, F, (1.0, 0.55, 1.0, 0.25), pos=(0, y, 0), hpr=(0, 90, 0), additive=True, orient=None)
+    return root
+
+
+def build_space_mouse(parent):
+    """A cybernetic space mouse, about 0.8 units long, nose along +y: grey fur, pink ears, a long tail,
+    a red implant eye and a tiny thruster."""
+    root = parent.attachNewNode("space-mouse")
+    fur = paint((0.18, 0.16, 0.16), (0.55, 0.5, 0.48), -0.15, 0.2, grime=0.3)
+    body = [(-0.32, 0.03, 0.03, 0.0, 2.0), (-0.25, 0.15, 0.13, 0.0, 2.0), (-0.05, 0.2, 0.17, 0.02, 2.0),
+            (0.15, 0.17, 0.15, 0.03, 2.0), (0.3, 0.1, 0.09, 0.02, 2.0), (0.42, 0.02, 0.02, 0.0, 2.0)]
+    V, F = sweep(body, 20)
+    part(root, V, F, (1, 1, 1), orient=None, vcol=fur)
+    Vi, Fi = icosphere(2)
+    for sgn in (1, -1):
+        part(root, Vi * np.array([0.09, 0.025, 0.09]), Fi, (0.95, 0.6, 0.62), pos=(sgn * 0.1, 0.2, 0.16))
+        part(root, Vi * np.array([0.06, 0.03, 0.06]), Fi, (0.75, 0.35, 0.4), pos=(sgn * 0.1, 0.19, 0.16))
+    part(root, Vi * 0.03, Fi, (1.0, 0.08, 0.04), pos=(0.07, 0.33, 0.07), unlit=True)  # implant eye
+    glow(root, (0.07, 0.35, 0.07), 0.22, (1.0, 0.1, 0.05, 0.95))
+    part(root, Vi * 0.022, Fi, (0.02, 0.02, 0.02), pos=(-0.07, 0.33, 0.07))
+    part(root, Vi * 0.025, Fi, (0.95, 0.55, 0.6), pos=(0, 0.43, 0.0))  # nose
+    for sgn in (1, -1):  # whiskers
+        for k in (-1, 1):
+            Vw, Fw = tube_mesh([(sgn * 0.03, 0.4, 0.01 * k), (sgn * 0.15, 0.42, 0.03 * k), (sgn * 0.26, 0.38, 0.05 * k)],
+                               0.004, 4)
+            part(root, Vw, Fw, (0.85, 0.85, 0.85), orient=None)
+    tube(root, [(0, -0.3, 0.0), (0.12, -0.5, 0.05), (-0.12, -0.7, 0.02), (0.05, -0.92, 0.08)], 0.018,
+         (0.85, 0.55, 0.55))
+    Vt, Ft = lathe([(0.05, -0.18), (0.06, -0.3), (0.04, -0.36)], 12, "y")  # thruster on its back
+    part(root, Vt, Ft, (0.2, 0.2, 0.22), pos=(0, 0, 0.16), orient="y")
+    glow(root, (0, -0.4, 0.16), 0.3, (0.4, 0.8, 1.0, 0.9))
     return root
 
 
@@ -884,8 +1025,8 @@ def build_explosion(parent, t, seed=5, scale=1.0):
         d[2] *= 0.4
         d /= np.linalg.norm(d)
         p = d * (0.4 + 6.5 * t * rng.uniform(0.6, 1.2))
-        V, F, cols, _ = asteroid_mesh(int(rng.integers(1000)), rng.uniform(0.08, 0.22), sub=0)
-        part(root, V, F, cols, pos=tuple(p), hpr=tuple(rng.uniform(0, 360, 3)))
+        V, F, vcol, _ = asteroid_mesh(int(rng.integers(1000)), rng.uniform(0.08, 0.22), sub=0)
+        part(root, V, F, (1, 1, 1), vcol=vcol, pos=tuple(p), hpr=tuple(rng.uniform(0, 360, 3)))
         if t < 0.6:
             glow(root, tuple(p), 0.3, (1, 0.6, 0.2, 0.7 * fade))
     root.setScale(scale)
@@ -971,21 +1112,7 @@ def build_helmet(parent):
         Vv, Fv = box(0.18, 0.04, 0.08)
         part(root, Vv, Fv, (1, 0.5, 0.1), pos=(1.2 * math.cos(a), 1.2 * math.sin(a), -1.8),
              hpr=(math.degrees(a) + 90, 0, 0), unlit=True)
-    # sunglasses over the eyes
-    lens = [(-0.21, 0.08), (0.2, 0.1), (0.25, -0.01), (0.14, -0.13), (-0.13, -0.14), (-0.24, -0.04)]
-    Vl, Fl = prism(lens, 0.035)
-    Vl = Vl[:, [0, 2, 1]]
-    for sgn in (1, -1):
-        part(root, Vl * np.array([sgn, 1, 1]), Fl, (0.03, 0.03, 0.04), pos=(sgn * 0.33, -0.98, EYE_Z), name="lens")
-        Vh2, Fh2 = box(0.12, 0.01, 0.025)
-        part(root, Vh2, Fh2, (0.8, 0.85, 0.95, 0.7), pos=(sgn * 0.33 - 0.06, -1.0, EYE_Z + 0.04),
-             hpr=(0, 0, 25), unlit=True, alpha=True)
-        Vb, Fb = box(0.52, 0.03, 0.035)
-        part(root, Vb, Fb, (0.75, 0.6, 0.25), pos=(sgn * 0.33, -0.985, EYE_Z + 0.1))
-        Va, Fa = box(0.03, 1.0, 0.03)
-        part(root, Va, Fa, (0.75, 0.6, 0.25), pos=(sgn * 0.6, -0.5, EYE_Z + 0.08), hpr=(sgn * 8, 0, 0))
-    Vb, Fb = box(0.16, 0.03, 0.03)
-    part(root, Vb, Fb, (0.75, 0.6, 0.25), pos=(0, -0.99, EYE_Z + 0.06))
+    build_tactical_shades(root)
     # cigar in the corner of the mouth, glowing tip and a wisp of smoke
     cig = root.attachNewNode("cigar")
     Vc, Fc = lathe([(0.0, 0.0), (0.06, -0.02), (0.075, -0.15), (0.075, -0.62), (0.07, -0.7)], 8, "y")
@@ -1003,6 +1130,71 @@ def build_helmet(parent):
         p = (tip[0] + 0.06 * k + rng.uniform(-0.05, 0.05), tip[1] - 0.02 * k, tip[2] + 0.12 + 0.17 * k)
         glow(root, p, 0.18 + 0.07 * k, (0.75, 0.75, 0.8, 0.22 - 0.025 * k))
     return root
+
+
+def build_tactical_shades(root):
+    """Heavy wraparound shades, space-marine style: big angular mirrored lenses that follow the curve of
+    the face, a thick armoured brow bar, side shields and riveted temples. Lenses are named "lens"
+    (they glow violet while the eyes are closed)."""
+    gun = paint((0.05, 0.05, 0.06), (0.3, 0.31, 0.34), EYE_Z - 0.2, EYE_Z + 0.25, grime=0.15)
+    # one lens: a curved plate (columns across x, rows over z), wrapping back towards the temples
+    outline_top = lambda u: 0.17 - 0.03 * u ** 2          # noqa: E731  top edge, u -1 (nose) .. 1 (temple)
+    outline_bot = lambda u: -0.2 + 0.09 * u ** 2 + 0.05 * u  # noqa: E731
+    nu, nv = 12, 6
+
+    def lens_mesh(sgn, inset=0.0, y_off=0.0):
+        V, F = [], []
+        for i in range(nu + 1):
+            u = -1 + 2 * i / nu
+            x = sgn * (0.37 + 0.3 * u)
+            wrap = 0.24 * max(0.0, u + 0.3) ** 2               # bends back towards the ear
+            for j in range(nv + 1):
+                v = j / nv
+                z = outline_bot(u) + inset + (outline_top(u) - outline_bot(u) - 2 * inset) * v
+                V.append((x, -1.0 + wrap + 0.02 * (2 * v - 1) ** 2 + y_off, EYE_Z + z))
+        for i in range(nu):
+            for j in range(nv):
+                a = i * (nv + 1) + j
+                F.append((a, a + nv + 1, a + nv + 2, a + 1))
+        return np.array(V, float), F
+
+    def mirror(p):
+        """Dark amber below, steel blue above, and a diagonal sheen: reads as a mirrored visor."""
+        h = min(1.0, max(0.0, (p[2] - EYE_Z + 0.2) / 0.37))
+        sheen = max(0.0, 1 - abs((abs(p[0]) * 0.8 + (p[2] - EYE_Z)) - 0.38) / 0.035) * 0.55
+        return (0.08 * (1 - h) + 0.12 * h + sheen, 0.04 * (1 - h) + 0.22 * h + sheen, 0.02 * (1 - h) + 0.36 * h + sheen)
+    for sgn in (1, -1):
+        V, F = lens_mesh(sgn)
+        lens = part(root, V, F, (1, 1, 1), orient=None, two_sided=True, vcol=mirror, name="lens")
+        lens.setMaterial(Material("mirror"), 1)
+        lens.getMaterial().setSpecular((1.4, 1.4, 1.5, 1))
+        lens.getMaterial().setShininess(90)
+        # frame: a rim around the lens edge (tubes along the outline)
+        rim = [(sgn * (0.37 + 0.3 * u), -1.0 + 0.24 * max(0.0, u + 0.3) ** 2 - 0.005, EYE_Z + f(u))
+               for f in (outline_top, outline_bot) for u in np.linspace(-1, 1, 14)]
+        top, bot = rim[:14], rim[14:]
+        for pts, r in ((top, 0.035), (bot, 0.022)):
+            Vr, Fr = tube_mesh(pts, r, 8)
+            part(root, Vr, Fr, (1, 1, 1), orient=None, vcol=gun)
+        Ve, Fe = tube_mesh([top[0], bot[0]], 0.022, 8)
+        part(root, Ve, Fe, (1, 1, 1), orient=None, vcol=gun)
+        # side shield and armoured temple arm with rivets and a status light
+        Vs, Fs = box(0.05, 0.3, 0.3)
+        part(root, Vs, Fs, (1, 1, 1), pos=(sgn * 0.69, -0.72, EYE_Z), hpr=(sgn * 12, 0, 0), vcol=gun, smooth=None)
+        Va, Fa = box(0.07, 0.9, 0.08)
+        part(root, Va, Fa, (1, 1, 1), pos=(sgn * 0.72, -0.3, EYE_Z + 0.06), hpr=(sgn * 6, 0, 0), vcol=gun, smooth=None)
+        Vi, Fi = icosphere(1)
+        for k in range(3):
+            part(root, Vi * 0.018, Fi, (0.6, 0.6, 0.62), pos=(sgn * 0.735, -0.62 + 0.12 * k, EYE_Z + 0.06))
+        part(root, Vi * 0.02, Fi, (1.0, 0.2, 0.1), pos=(sgn * 0.735, -0.25, EYE_Z + 0.07), unlit=True)
+        glow(root, (sgn * 0.74, -0.25, EYE_Z + 0.07), 0.08, (1.0, 0.2, 0.1, 0.9))
+    # brow bar across both lenses and a heavy nose bridge
+    brow = [(x, -1.01 + 0.24 * max(0.0, (abs(x) - 0.37) / 0.3 + 0.3) ** 2, EYE_Z + 0.185 - 0.02 * (x / 0.67) ** 2)
+            for x in np.linspace(-0.67, 0.67, 21)]
+    Vb, Fb = tube_mesh(brow, 0.045, 10)
+    part(root, Vb, Fb, (1, 1, 1), orient=None, vcol=gun)
+    Vn, Fn = box(0.12, 0.06, 0.09)
+    part(root, Vn, Fn, (1, 1, 1), pos=(0, -1.02, EYE_Z + 0.07), vcol=gun, smooth=None)
 
 
 def _bezier(ctrl, n):

@@ -9,7 +9,7 @@ from panda3d.core import (
 )
 
 from ..audio import AudioSystem
-from ..game.levels import LEVELS
+from ..game.levels import DIFFICULTIES, LEVELS, level_data
 from ..game.levels.endless import Endless
 from ..game.save import SaveData
 from ..game.world import World
@@ -19,9 +19,9 @@ from ..input.keyboard import KeyboardControls
 from ..render.backdrop import Backdrop
 from ..render.effects import ScreenFlash
 from ..render.hud import Hud
-from ..render.overlays import HypnoOverlay, SplatterOverlay
+from ..render.overlays import CinemaOverlay, HypnoOverlay, SplatterOverlay
 from ..render.webcam_view import WebcamView
-from .states import HighscoreState, IntroState, MenuState, NameEntryState, PlayState
+from .states import HighscoreState, LoadingState, MenuState, NameEntryState, PlayState
 
 GAME_VFOV = 44.0
 
@@ -36,7 +36,8 @@ class App(ShowBase):
         self.panel_visible = True
         self.cam_full = False
         self.save = SaveData()
-        self.mode = "easy"
+        self.mode = "medium"        # easy / medium / hard / endless / practice
+        self.difficulty = "medium"  # level tuning: easy / medium / hard
         self.calibrated = False
         self.text_input = False
         self._setup_scene()
@@ -46,14 +47,19 @@ class App(ShowBase):
         self.keyboard = KeyboardControls(self)
         self._last_keyboard = -99.0
         self._pause = self._skip = False
-        self.webcam = WebcamView(self)
+        self.webcam = WebcamView(self, background=self.tracker_ok and cfg.get("display.webcam_background", True))
         self.hud = Hud(self)
         self.flash = ScreenFlash(self.render2d)
         self.backdrop = Backdrop(self.render, self.camera, seed=3)
         self.hypno_overlay = HypnoOverlay(self.camera)
         self.splatter = SplatterOverlay(self.camera, cfg["effects.splatter_s"])
+        self.cinema = CinemaOverlay(self.camera, self.camLens)
         self.hypno_alpha = 0.0
+        self.hud.message("fAIceCommander 3D", "Loading ...", "the very first start builds all models - this takes a few seconds")
+        for _ in range(2):  # show that before the (possibly long) model build
+            self.graphicsEngine.renderFrame()
         self.world = World(self, cfg)
+        self.hud.message()
         self.audio = AudioSystem(self, cfg)
         self.level_count = len(LEVELS)
         self.level_index = max(0, min(self.level_count - 1, getattr(args, "level", 1) - 1))
@@ -77,10 +83,8 @@ class App(ShowBase):
         if args.autopilot or args.level > 1:  # straight into the action (practice, tests)
             self.calibrated = True
             self.start_run("easy", args.level - 1)
-        elif cfg.get("display.play_intro", True):
-            self.change(IntroState)
         else:
-            self.change(MenuState)
+            self.change(LoadingState)  # passes straight on when everything is cached
         self.taskMgr.add(self.update, "update")
         self._t0 = time.monotonic()
 
@@ -90,17 +94,17 @@ class App(ShowBase):
         self.render.setAntialias(AntialiasAttrib.MMultisample)
         self.render.setShaderAuto()
         mat = Material("hull")
-        mat.setSpecular((0.32, 0.32, 0.35, 1))
-        mat.setShininess(28)
+        mat.setSpecular((0.2, 0.2, 0.22, 1))
+        mat.setShininess(36)
         self.render.setMaterial(mat)
         amb = self.render.attachNewNode(AmbientLight("amb"))
-        amb.node().setColor((0.2, 0.2, 0.27, 1))
-        key = self.render.attachNewNode(DirectionalLight("key"))
-        key.node().setColor((1.15, 1.07, 1.0, 1))
-        key.setHpr(-35, -55, 0)
-        rim = self.render.attachNewNode(DirectionalLight("rim"))
-        rim.node().setColor((0.55, 0.4, 1.0, 1))
-        rim.setHpr(150, -15, 0)
+        amb.node().setColor((0.11, 0.115, 0.15, 1))
+        key = self.render.attachNewNode(DirectionalLight("key"))  # low, raking sun: strong form shading
+        key.node().setColor((1.2, 1.1, 0.98, 1))
+        key.setHpr(-62, -32, 0)
+        rim = self.render.attachNewNode(DirectionalLight("rim"))  # cold bounce from the other side
+        rim.node().setColor((0.35, 0.45, 0.95, 1))
+        rim.setHpr(120, -20, 0)
         for light in (amb, key, rim):
             self.render.setLight(light)
         self.camera.setPos(0, -15.0, 18.0)
@@ -110,8 +114,8 @@ class App(ShowBase):
             try:
                 from direct.filter.CommonFilters import CommonFilters
                 self.filters = CommonFilters(self.win, self.cam)
-                if not self.filters.setBloom(blend=(0.3, 0.4, 0.3, 0.0), mintrigger=0.55, maxtrigger=1.0,
-                                             desat=0.1, intensity=1.1, size="medium"):
+                if not self.filters.setBloom(blend=(0.3, 0.4, 0.3, 0.0), mintrigger=0.72, maxtrigger=1.0,
+                                             desat=0.1, intensity=1.25, size="medium"):
                     self.filters = None
             except Exception:  # bloom is cosmetic; never block the game on it
                 self.filters = None
@@ -200,10 +204,12 @@ class App(ShowBase):
         if self.mode == "endless":
             return Endless(self.world, self.levels_cfg["endless"], self.levels_cfg)
         cls = LEVELS[self.level_index]
-        return cls(self.world, self.levels_cfg[cls.key])
+        return cls(self.world, level_data(self.levels_cfg, cls.key, self.difficulty))
 
-    def start_run(self, mode, level_index=0):
+    def start_run(self, mode, level_index=0, difficulty=None):
+        """mode: easy / medium / hard (a full run), endless, or practice (one level at `difficulty`)."""
         self.mode = mode
+        self.difficulty = mode if mode in DIFFICULTIES else (difficulty or self.difficulty)
         self.level_index = level_index
         self.world.score = 0.0
         self.change(PlayState)
@@ -224,7 +230,7 @@ class App(ShowBase):
             self.change(MenuState)
 
     def restart_level(self):
-        """Easy mode: retry the current level with the score it started with."""
+        """Easy / medium: retry the current level with the score it started with."""
         self.world.score = self.level_start_score
 
     def shake(self, amount):
@@ -257,7 +263,7 @@ class App(ShowBase):
         if self.autopilot:
             ctl = self.autopilot.update(dt, self.world, getattr(getattr(self.state, "level", None), "hypno", None))
         self.state.update(dt, face, ctl)
-        self.webcam.update(face, ctl)
+        self.webcam.update(face, ctl, dt, self.shake_amount, self.hypno_alpha)
         self.hud.set_gauges(ctl)
         if self.tracker_ok:
             self.hud.set_status(f"FACE TRACKING · camera {self.tracker.fps:.0f} fps\n"
@@ -269,6 +275,7 @@ class App(ShowBase):
         self.flash.update(dt)
         self.hypno_overlay.update(dt, self.hypno_alpha)
         self.splatter.update(dt)
+        self.cinema.update(dt)
         self.audio.update(dt)
         self.shake_amount = max(0.0, self.shake_amount - dt * 2.5)
         if not self.state.cinematic:  # cutscenes move the camera themselves

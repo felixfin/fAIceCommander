@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-MODES = ("easy", "hard", "endless")
+MODES = ("easy", "medium", "hard", "endless")
 TOP = 10
 
 

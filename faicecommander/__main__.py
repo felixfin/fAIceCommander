@@ -1,7 +1,7 @@
 """Entry point: python -m faicecommander [--windowed] [--no-camera]"""
 import argparse
 
-from panda3d.core import loadPrcFileData
+from panda3d.core import Filename, loadPrcFileData
 
 
 def main():
@@ -15,17 +15,20 @@ def main():
     parser.add_argument("--level", type=int, default=1, help="start at this level (practice; development)")
     args = parser.parse_args()
 
-    from .config import Config
+    from .config import ASSETS_DIR, Config
     cfg = Config.load("config.toml")
+    icon = Filename.fromOsSpecific(str(ASSETS_DIR / "icon.ico")).getFullpath()
     levels = Config.load("levels.toml")
     w, h = cfg["display.window_size"]
     loadPrcFileData("", f"""
 window-title fAIceCommander 3D
+icon-filename {icon}
 win-size {w} {h}
 framebuffer-multisample 1
 multisamples 4
 sync-video 1
 audio-preload-threshold 60000000
+textures-power-2 none
 {"window-type offscreen" if args.offscreen else ""}
 """)
     from .core.app import App

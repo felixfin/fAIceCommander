@@ -1,4 +1,4 @@
-"""Level 2 - Debris Field: four category 1 asteroids plus one category 2 asteroid.
+"""Level 2 - Debris Field: category 1 asteroids plus category 2 asteroids (4 + 1 on easy).
 
 Category 2 (30-50 px) takes two laser hits, two seconds of beam or one nuke, deals 50 % damage and
 breaks into up to three category 1 asteroids when shot (a nuke vaporises it). Beam and nukes unlock here.
@@ -21,10 +21,6 @@ class DebrisField(Level):
                             "score": d["score_per_kill"]}
 
     def spawn(self, dt):
-        d, w = self.data, self.world
-        while w.count(2) < d["large_count"]:
-            w.spawn_asteroid(2, d["large_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"] * 0.6,
-                             d["large_damage_percent"], d["score_per_large"])
-        while w.count(1) < d["small_count"]:
-            w.spawn_asteroid(1, d["small_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"],
-                             d["damage_percent"], d["score_per_kill"])
+        d = self.data
+        self.keep_rocks(d["large_count"], 2, "large_size_px", "large_damage_percent", "score_per_large", spread=0.6)
+        self.keep_rocks(d["small_count"], 1, "small_size_px")

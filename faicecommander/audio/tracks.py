@@ -2,6 +2,7 @@
 MusicDirector fades in and out (drums, bass, arp, pad, lead, heartbeat ...)."""
 import numpy as np
 
+from . import cats
 from .synth import (
     BAR, BEAT, STEP, Mixer, bp, clap, crash, fade, hat, kick, lp, master, noise, note, pad_tail, reverb, rng, saw, sine,
     snare, square, sweep_lp, t_arr,
@@ -372,49 +373,188 @@ def track_mother():
     return stems
 
 
+# ---------------------------------------------------------------- scored cutscenes
+
+def braam(m, start, dur, f, gain):
+    """The big cinematic brass hit: a wall of detuned saws that opens up, distorts and rings out."""
+    t = t_arr(dur)
+    src = sum(saw(f * k * (1 + d), t, ph0=np.random.random()) * g
+              for k, g in ((0.5, 0.8), (1.0, 1.0), (1.5, 0.45), (2.0, 0.3)) for d in (-0.008, -0.003, 0.004, 0.009))
+    cutoff = 180 + 2200 * np.minimum(1, t / 0.35) * np.exp(-t * 0.6)
+    s = np.tanh(sweep_lp(src, cutoff, q=0.9) * 0.9) * np.minimum(1, t / 0.04) * np.minimum(1, (dur - t) / 0.6)
+    s += sine(f / 2, t) * np.exp(-t * 0.8) * 0.8
+    s = reverb(pad_tail(s, 3.0), 0.45, 1.6)
+    m.add(start, s, gain, -0.15)
+    m.add(start + 0.009, s, gain, 0.15)
+
+
+def taiko(gain_noise=0.4, pitch=55):
+    tb = t_arr(1.2)
+    return sine(pitch + 55 * np.exp(-tb * 18), tb) * np.exp(-tb * 4.5) + lp(noise(len(tb)), 700) * np.exp(-tb * 22) * gain_noise
+
+
+def impact(m, start, gain, sub=34):
+    """A trailer 'hit': sub drop, noise slam and a long tail."""
+    t = t_arr(3.5)
+    s = sine(sub + 60 * np.exp(-t * 6), t) * np.exp(-t * 1.3)
+    s += lp(noise(len(t)), 1800) * np.exp(-t * 9) * 0.7
+    s += bp(noise(len(t)), 2000, 9000) * np.exp(-t * 25) * 0.4
+    m.add(start, reverb(np.tanh(s * 1.4), 0.4, 1.8), gain)
+
+
+def riser(m, start, dur, gain):
+    t = t_arr(dur)
+    u = t / dur
+    s = sweep_lp(noise(len(t)), 300 + 9000 * u ** 2, q=2.0) * u ** 1.5
+    s += saw(110 * 2 ** (u * 3), t) * 0.15 * u ** 2
+    m.add(start, reverb(pad_tail(s, 1.0), 0.35), gain, 0.0)
+
+
+def strings(m, start, dur, chord, gain, tremolo=0.0, cutoff=2400, attack=1.5):
+    """A string section: detuned saw ensemble, optional tremolo (bowing agitation)."""
+    t = t_arr(dur)
+    src = sum(saw(f * (1 + d) * (1 + 0.003 * np.sin(2 * np.pi * (5 + 30 * d) * t)), t, ph0=np.random.random())
+              for f in chord for d in (-0.005, 0.0, 0.004))
+    s = lp(src, cutoff) * np.minimum(1, t / attack) * np.minimum(1, (dur - t) / 1.0)
+    if tremolo:
+        s *= 0.6 + 0.4 * np.sin(2 * np.pi * tremolo * t)
+    s = reverb(pad_tail(s, 2.5), 0.45, 1.4)
+    m.add(start, s, gain, -0.25)
+    m.add(start + 0.012, s, gain, 0.25)
+
+
+def ostinato(m, start, dur, pattern, step, gain, cutoff=1800):
+    """Driving staccato strings: one short bowed note per step, cycling through pattern."""
+    k = 0
+    while k * step < dur:
+        f = note(pattern[k % len(pattern)])
+        t = t_arr(step * 0.9)
+        s = lp(saw(f, t) + saw(f * 1.004, t, 0.3) + 0.5 * saw(f / 2, t), cutoff) * np.exp(-t * 9)
+        m.add(start + k * step, s, gain * (1.0 if k % 4 == 0 else 0.7), (-0.3, 0.3)[k % 2])
+        k += 1
+
+
+def piano(m, start, f, gain, pan=0.0):
+    t = t_arr(3.0)
+    s = sum(np.sin(2 * np.pi * f * h * t) * np.exp(-t * (1.6 + h * 0.9)) / h ** 1.3 for h in (1, 2, 3, 4, 5))
+    s *= np.minimum(1, t / 0.004)
+    m.add(start, reverb(pad_tail(s, 2.0), 0.5, 1.5), gain, pan)
+
+
 def track_cinematic():
-    """Intro: dark and cinematic - low drones, war drums, choir, a slow pulse."""
+    """Intro score (one pass through the intro, see cutscenes/timeline.py): a heartbeat in the dark,
+    war drums over the burning world, dissonant strings for the slaves, BRAAAMs for the Mother, a
+    battle ostinato, silence and a lonely piano in the med bay, a rising theme in the shipyard and a
+    final hit on "you are our last hope"."""
+    from ..cutscenes.timeline import INTRO, length, starts
     rng(9)
     np.random.seed(9)
-    st = {k: Mixer(LOOP) for k in ("drone", "drums", "choir", "pulse")}
-    t = t_arr(LOOP)
-    drone = sine(note("C1"), t) * 0.7 + saw(note("C2") * 1.002, t) * 0.1 + saw(note("G2") * 0.998, t) * 0.07
-    st["drone"].add(0, lp(drone, 220) * (0.75 + 0.25 * np.sin(2 * np.pi * t / LOOP * 2)), 1.0)
-    for b in range(BARS):
-        for s0, g in ((0, 1.0), (6, 0.6), (8, 0.8), (14, 0.5)):
-            tb = t_arr(1.0)
-            taiko = sine(55 + 50 * np.exp(-tb * 18), tb) * np.exp(-tb * 5) + lp(noise(len(tb)), 600) * np.exp(-tb * 20) * 0.4
-            st["drums"].add(b * BAR + s0 * STEP * 2, taiko, g * (0.5 if b < 4 else 1.0))
-        st["pulse"].add(b * BAR, sine(note("C2"), t_arr(0.5)) * np.exp(-t_arr(0.5) * 6), 0.4)
-    for i, ch in enumerate((("C3", "G3", "Eb4"), ("Ab2", "Eb3", "C4"), ("F2", "C3", "Ab3"), ("G2", "D3", "Bb3"))):
-        choir(st["choir"], i * 4 * BAR, 4 * BAR + 0.6, [note(n) for n in ch], 0.14, "u" if i % 2 else "o")
-    return master({k: m.buf for k, m in st.items()}, 0.8)
+    T = starts(INTRO)
+    total = length(INTRO) + 6.0
+    st = {k: Mixer(total, np.float32) for k in ("bed", "drums", "brass", "fx")}
+    tt = t_arr(total)
+    # bed: a C drone that swells with the story; it pulls back for the pod and the med bay
+    swell = np.interp(tt, [0, T["planet"], T["mother"], T["battle"], T["pod"], T["medbay"], T["hangar"],
+                           T["becoming"], total], [0.4, 0.7, 0.9, 1.0, 0.15, 0.3, 0.7, 1.0, 0.6])
+    drone = sine(note("C1"), tt) * 0.8 + saw(note("C2") * 1.002, tt) * 0.12 + saw(note("G2") * 0.998, tt) * 0.08
+    st["bed"].add(0, lp(drone, 240) * swell, 1.0)
+    del drone, swell, tt
+    # heartbeat in the dark and again in the med bay
+    tb = t_arr(0.35)
+    thump = lp(sine(48 + 30 * np.exp(-tb * 20), tb) * np.exp(-tb * 14), 400)
+    for t0, t1 in ((0.0, T["planet"]), (T["medbay"], T["hangar"])):
+        k = t0
+        while k < t1 - 0.3:
+            st["drums"].add(k, thump, 0.55)
+            st["drums"].add(k + 0.24, thump, 0.33)
+            k += 1.1
+    # the burning world: slow taikos, low strings
+    for i in range(10):
+        st["drums"].add(T["planet"] + 1.0 + i * 1.0, taiko(), 0.45 + 0.04 * i)
+    strings(st["bed"], T["planet"], 11.5, [note(n) for n in ("C2", "G2", "C3", "Eb3")], 0.05)
+    # slaves: a dissonant cluster with nervous tremolo and an eerie choir
+    strings(st["bed"], T["slaves"], 12.8, [note(n) for n in ("B2", "C3", "Gb3", "G3")], 0.045,
+            tremolo=7.0, cutoff=1800, attack=2.5)
+    choir(st["bed"], T["slaves"] + 2.0, 10.0, [note(n) for n in ("C4", "Db4", "G4")], 0.09, "u")
+    # the Mother: drums build, a BRAAAM when she appears, another for her face
+    for i in range(16):
+        st["drums"].add(T["mother"] + i * 0.55, taiko(0.5, 50), 0.35 + i * 0.03)
+    braam(st["brass"], T["mother"] + 1.0, 5.0, note("C2"), 0.22)
+    braam(st["brass"], T["mother"] + 6.0, 3.0, note("Db2"), 0.2)
+    riser(st["fx"], T["queen"] - 2.5, 2.5, 0.16)
+    impact(st["fx"], T["queen"] + 0.3, 0.6)
+    braam(st["brass"], T["queen"] + 0.3, 4.0, note("C2"), 0.3)
+    choir(st["bed"], T["queen"], 4.8, [note(n) for n in ("C3", "Gb3", "C4")], 0.12, "a")
+    # battle: ostinato strings, fast taikos, brass stabs, crashes
+    beat = 60 / 90
+    ostinato(st["bed"], T["battle"], 12.3, ["C3", "C3", "Eb3", "C3", "G3", "C3", "Ab3", "G3"], beat / 2, 0.07)
+    k = 0
+    while k * beat / 2 < 12.3:
+        t0 = T["battle"] + k * beat / 2
+        st["drums"].add(t0, taiko(0.6, 60 if k % 2 == 0 else 80), 0.6 if k % 4 == 0 else 0.35)
+        if k % 8 == 0:
+            st["drums"].add(t0, crash(2.5), 0.2)
+        k += 1
+    for n_, at in (("C2", 0.0), ("Eb2", 2.7), ("Ab1", 5.3), ("G1", 8.0), ("C2", 10.6)):
+        braam(st["brass"], T["battle"] + at, 2.2, note(n_), 0.18)
+    impact(st["fx"], T["battle"] + 7.0, 0.5)  # the hyperdrive fails
+    # pod: everything stops - a tinnitus whine, then the med bay's lonely piano
+    tw = t_arr(5.0)
+    st["fx"].add(T["pod"], sine(3900, tw) * np.exp(-tw * 0.5) * np.minimum(1, tw / 0.05) * 0.06, 1.0)
+    for i, (n_, at) in enumerate((("C5", 0.5), ("Eb5", 1.5), ("G4", 2.5), ("Ab4", 3.5), ("G4", 4.7), ("Eb5", 5.6),
+                                   ("D5", 6.5))):
+        piano(st["bed"], T["medbay"] + at, note(n_), 0.12, (-0.3, 0.3)[i % 2])
+    # hangar: hope - a rising theme over returning drums
+    chords = (("C3", "G3", "C4", "Eb4"), ("Ab2", "Eb3", "C4"), ("Bb2", "F3", "D4"), ("G2", "D3", "B3", "D4"))
+    for i, ch in enumerate(chords):
+        strings(st["bed"], T["hangar"] + i * 3.0, 3.4, [note(n) for n in ch], 0.05 + 0.01 * i, attack=0.8)
+    for i in range(24):
+        st["drums"].add(T["hangar"] + i * 0.5, taiko(0.4, 55), 0.15 + i * 0.015)
+    braam(st["brass"], T["hangar"] + 9.0, 3.0, note("G1"), 0.16)
+    # waking: hush, choir swells, a riser into the final hit
+    choir(st["bed"], T["waking"], 9.5, [note(n) for n in ("C4", "Eb4", "G4", "Bb4")], 0.08, "o")
+    riser(st["fx"], T["becoming"], 2.0, 0.2)
+    impact(st["fx"], T["becoming"] + 2.0, 0.75)
+    braam(st["brass"], T["becoming"] + 2.0, 6.0, note("C2"), 0.3)
+    choir(st["bed"], T["becoming"] + 2.0, 7.0, [note(n) for n in ("C3", "G3", "C4", "E4", "G4")], 0.14, "a")
+    return master({k: m.buf.astype(np.float64) for k, m in st.items()}, 0.85)
 
 
 def track_victory():
-    """Outro: hopeful - warm pads, rising arps, a calm beat, choir in major."""
+    """Outro party: euphoric festival drum & bass - hard drums, rolling bass, supersaw chord stabs,
+    a soaring lead hook, chopped choir shouts and risers. Loops."""
     rng(10)
     np.random.seed(10)
-    st = {k: Mixer(LOOP) for k in ("drums", "pad", "arp", "choir", "lead")}
-    chords = [("C3", "E3", "G3", "C4"), ("A2", "C3", "E3", "A3"), ("F2", "A2", "C3", "F3"), ("G2", "B2", "D3", "G3")]
+    st = {k: Mixer(LOOP) for k in ("drums", "bass", "chords", "lead", "choir", "pad")}
+    HEY = sum(cats.voice(0.28, [(0, f), (0.3, f * 1.15), (1, f * 0.9)],
+                         [([(0, 600), (1, 500)], 120, 1.0), ([(0, 1900), (1, 2100)], 200, 0.7),
+                          ([(0, 2700), (1, 2700)], 260, 0.3)], rough=0.2, breath=0.15, attack=0.01, release=0.08,
+                         seed=70 + i) * 0.5 for i, f in enumerate((180, 205, 240, 270, 310)))
+    HEY = reverb(pad_tail(HEY, 0.6), 0.3, 1.2)
+    prog = [("A2", "C3", "E3", "A3"), ("F2", "A2", "C3", "F3"), ("C3", "E3", "G3", "C4"), ("G2", "B2", "D3", "G3")]
+    roots = ["A1", "F1", "C2", "G1"]
     for b in range(BARS):
-        t0 = b * BAR
-        st["drums"].add(t0, kick(0.8), 0.6)
-        st["drums"].add(t0 + 8 * STEP, kick(0.8), 0.5)
-        st["drums"].add(t0 + 4 * STEP, snare(200, 8000), 0.25)
-        st["drums"].add(t0 + 12 * STEP, snare(200, 8000), 0.25)
-        for s0 in range(0, 16, 2):
-            st["drums"].add(t0 + s0 * STEP, hat(), 0.1, 0.3)
-        ch = chords[(b // 4) % 4]
-        seq = [ch[k % 4][:-1] + str(int(ch[k % 4][-1]) + 2) for k in (0, 1, 2, 3, 2, 1, 2, 3)] * 2
-        arp(st["arp"], b, seq, 0.08, cutoff=4500)
-    for i in range(BARS // 4):
-        c = [note(n) for n in chords[i % 4]]
-        supersaw_pad(st["pad"], i * 4 * BAR, 4 * BAR + 0.5, c, 0.03)
-        choir(st["choir"], i * 4 * BAR, 4 * BAR + 0.6, [x * 2 for x in c], 0.045, "a")
-    for n, s0, ln in (("E5", 0, 8), ("D5", 8, 4), ("C5", 12, 4), ("E5", 16, 8), ("G5", 24, 8),
-                      ("A5", 32, 8), ("G5", 40, 4), ("E5", 44, 4), ("D5", 48, 16)):
-        lead(st["lead"], s0 * STEP * 4, ln * STEP * 4 * 0.95, note(n), 0.06, vibrato=4.0)
+        _dnb_drums(st["drums"], b, fill=(b % 4 == 3), heavy=True)
+        ch = [note(n) for n in prog[(b // 2) % 4]]
+        r = note(roots[(b // 2) % 4])
+        for s0, ln in ((0, 3), (3, 3), (6, 4), (10, 2), (12, 4)):  # rolling bass
+            reese(st["bass"], b * BAR + s0 * STEP, ln * STEP * 0.92, r, 0.3, cutoff=650)
+        for s0 in (2, 6, 10, 14):  # offbeat supersaw stabs
+            t = t_arr(STEP * 1.6)
+            stab = sum(saw(f * 2 * (1 + d), t) for f in ch for d in (-0.01, 0.0, 0.01))
+            st["chords"].add(b * BAR + s0 * STEP, lp(stab, 5000) * np.exp(-t * 9), 0.05, -0.3 if s0 % 8 == 2 else 0.3)
+        if b % 8 == 7:
+            riser(st["pad"], b * BAR, BAR, 0.12)
+        if b % 2 == 0:
+            for s0 in (0, 3):  # a crowd shouting "HEY!"
+                st["choir"].add(b * BAR + s0 * STEP, HEY, 0.22, (-0.2, 0.2)[s0 == 3])
+    for i in range(BARS // 2):
+        supersaw_pad(st["pad"], i * 2 * BAR, 2 * BAR + 0.4, [note(n) for n in prog[i % 4]], 0.03, cutoff=2500)
+    hook = [("E5", 0, 3), ("D5", 3, 3), ("C5", 6, 2), ("D5", 8, 4), ("E5", 12, 4), ("G5", 16, 6), ("A5", 22, 2),
+            ("G5", 24, 4), ("E5", 28, 4)]
+    for rep in range(BARS // 2):
+        for n_, s0, ln in hook:
+            lead(st["lead"], rep * 2 * BAR + s0 * STEP, ln * STEP * 0.95, note(n_), 0.2, vibrato=6.0)
     return master({k: m.buf for k, m in st.items()})
 
 
@@ -434,4 +574,4 @@ TRACKS = {
 TITLES = {"void": "THE VOID", "neural_breaks": "NEURAL BREAKS", "debris": "DEBRIS RUNNER",
           "hypno": "HYPNO NEBULA", "void_brains": "NOTHING ANSWERS", "patrol": "PATROL",
           "event_horizon": "EVENT HORIZON", "mother": "MOTHER OF CATS", "cinematic": "LAST HOPE",
-          "victory": "HONOR"}
+          "victory": "HONOR (PARTY MIX)"}

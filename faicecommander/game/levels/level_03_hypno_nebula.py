@@ -1,7 +1,8 @@
-"""Level 3 - Hypno Nebula: a thin asteroid field (one or two at a time) and hypno light pulses.
+"""Level 3 - Hypno Nebula: a dense asteroid field and short, frequent hypno light pulses.
 
-A pulse is announced 3 s ahead and lasts 10 s. Keep your eyes closed the whole time; the sonar
-beeps for objects ahead of the ship. Eyes open = the ship freezes until the pulse is over.
+A pulse is announced 3 s ahead: look hard at the field, then close your eyes and dodge from memory
+(and by the sonar, which beeps for objects ahead). No new asteroids appear while your eyes are
+closed - except on hard. Eyes open during a pulse = the ship freezes until the pulse is over.
 """
 from ..hypno import HypnoCycle, Sonar
 from .base import Level
@@ -37,11 +38,11 @@ class HypnoNebula(Level):
 
     def spawn(self, dt):
         d, w = self.data, self.world
+        if self.hypno.active and not d["pulse_spawns"]:
+            return  # what you saw is what you get
         self.recount -= dt
         if self.recount <= 0:
             lo, hi = d["asteroid_count"]
             self.wanted = int(w.rng.integers(lo, hi + 1))
             self.recount = 8.0
-        while w.count(1) < self.wanted:
-            w.spawn_asteroid(1, d["asteroid_size_px"], d["asteroid_speed_px"], d["asteroid_spread_deg"],
-                             d["damage_percent"], d["score_per_kill"])
+        self.keep_rocks(self.wanted)

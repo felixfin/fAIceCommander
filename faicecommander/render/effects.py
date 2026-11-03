@@ -21,8 +21,8 @@ class EffectTemplates:
         self.ring = M.part(self.store, V, F, (1, 1, 1), orient=None, additive=True, vcol=ring_col)
         self.debris = []
         for seed in range(6):
-            Vd, Fd, cols, _ = M.asteroid_mesh(100 + seed, 1.0, sub=0)
-            self.debris.append(M.part(self.store, Vd, Fd, cols))
+            Vd, Fd, vcol, _ = M.asteroid_mesh(100 + seed, 1.0, sub=0)
+            self.debris.append(M.part(self.store, Vd, Fd, (1, 1, 1), vcol=vcol))
         # laser beam: a unit-length glowing tube along +Y, scaled per frame
         self.beam = self.store.attachNewNode("beam")
         for r, col in ((0.07, (0.85, 1.0, 0.95, 0.95)), (0.18, (0.3, 1.0, 0.8, 0.55)), (0.38, (0.2, 0.9, 0.7, 0.22))):

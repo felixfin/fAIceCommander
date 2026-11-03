@@ -16,4 +16,4 @@ intro_11: FaceCommander - you are our last hope!
 outro_01: The Mother is dead.
 outro_02: Across the galaxy, the swarm loses its mind.
 outro_03: On a thousand worlds, the collars fall.
-outro_04: My name is... James Nathaniel Honor.
+outro_04: My name is Honor - James Nathaniel Honor.

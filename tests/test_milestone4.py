@@ -49,22 +49,23 @@ def test_zones_match_the_spec(world):
     assert m.zone(m.x + half * 1.1) is None
 
 
-@pytest.mark.parametrize("weapon,zone_x,expected", [("laser", 0.0, 20), ("laser", 0.3, 10), ("laser", 0.8, 5),
-                                                    ("nuke", 0.0, 60), ("nuke", 0.8, 20)])
-def test_damage_per_zone(world, weapon, zone_x, expected):
+@pytest.mark.parametrize("weapon,zone_x,zone", [("laser", 0.0, 3), ("laser", 0.3, 2), ("laser", 0.8, 1),
+                                                ("nuke", 0.0, 3), ("nuke", 0.8, 1)])
+def test_damage_per_zone(world, weapon, zone_x, zone):
     _, m = boss(world)
     m.hurt(weapon, m.x + m.width / 2 * zone_x)
-    assert m.health == pytest.approx(100 - expected)
+    assert m.health == pytest.approx(100 - LV["level_07"][weapon][zone - 1])
 
 
 def test_beam_damage_per_second_and_vulnerability_bonus(world):
     _, m = boss(world)
     for _ in range(60):
         m.hurt("beam", m.x, DT)
-    assert m.health == pytest.approx(70.0)
+    after_beam = 100 - LV["level_07.beam"][2]
+    assert m.health == pytest.approx(after_beam)
     m.vulnerable = 5.0
     m.hurt("laser", m.x)
-    assert m.health == pytest.approx(70.0 - 30.0)
+    assert m.health == pytest.approx(after_beam - LV["level_07.laser"][2] * 1.5)
 
 
 def test_mother_regenerates(world):
@@ -83,6 +84,30 @@ def test_lasers_hit_the_hull_from_below(world):
     for _ in range(120):
         world.update(DT, Controls())
     assert m.health < 100.0
+
+
+def test_she_gets_angrier_and_throws_mice(world):
+    lvl, m = boss(world)
+    lvl.elapsed = lvl.ENTER_S
+    m.health = LV["level_07.phase_at"][0] - 1
+    events = []
+    for _ in range(int(12 / DT)):
+        events += lvl.update(DT, Controls(eyes_closed=True))
+        world.ship.hull = 100.0
+    assert ("mother_phase", 2) in events and lvl.phase == 1 and m.speed_mult > 1
+    assert "mouse_throw" in [e[0] for e in events]
+
+
+def test_she_shoots_down_nukes(world):
+    lvl, m = boss(world)
+    lvl.elapsed = lvl.ENTER_S
+    m.health = LV["level_07.phase_at"][1] - 1
+    lvl.data = Config({**lvl.data.dict(), "intercept_chance": [1.0, 1.0, 1.0]})
+    world.fire_nuke(world.ship.x, world.ship.y + 1)
+    events = []
+    for _ in range(int(2 / DT)):
+        events += lvl.update(DT, Controls(eyes_closed=True))
+    assert "intercepted" in [e[0] for e in events]
 
 
 def test_she_shoots_and_bombs(world):

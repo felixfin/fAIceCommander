@@ -2,6 +2,7 @@
 
 Asteroids all the time; every 30 s a new phase adds brains, raiders or black holes; hypno pulses
 now and then. Difficulty rises steadily; one extra nuke every minute."""
+from ..entities.raider import raider_spec
 from ..hypno import HypnoCycle, Sonar
 from .base import Level
 
@@ -30,6 +31,7 @@ class Endless(Level):
         d3 = self.lv["level_03"]
         self.hypno = HypnoCycle(w.rng, d3["pulse_warning_s"], d3["pulse_duration_s"], 45.0, (35, 50),
                                 d3["eyes_grace_s"])
+        self.raider = raider_spec(self.lv["level_05"], w.u, toughness=1.0)
         self.sonar = Sonar()
         self.brain_t = 0.0
         self.next_nuke = 60.0
@@ -72,16 +74,17 @@ class Endless(Level):
         w, lv, diff = self.world, self.lv, self.difficulty
         d1, d2 = lv["level_01"], lv["level_02"]
         speed = [v * (0.8 + 0.2 * diff) for v in d1["asteroid_speed_px"]]
+        wobble = w.u(min(140, 40 * (diff - 1)))
         while w.count(1) < min(8, int(1 + diff * 1.5)):
             w.spawn_asteroid(1, d1["asteroid_size_px"], speed, d1["asteroid_spread_deg"], d1["damage_percent"],
-                             d1["score_per_kill"])
+                             d1["score_per_kill"], wobble=wobble)
         while w.count(2) < (0 if diff < 1.4 else 1 if diff < 3 else 2):
             w.spawn_asteroid(2, d2["large_size_px"], speed, 30, d2["large_damage_percent"], d2["score_per_large"])
         phase = self.phase
         if phase == "brains":
             d4 = lv["level_04"]
-            self.brain_t += dt * d4["brain_spawn_per_s"] * 0.5 * diff
-            while self.brain_t >= 1 and len(w.brains) < d4["max_brains"]:
+            self.brain_t += dt * d4["brain_spawn_per_s"][1] * 0.5 * diff
+            while self.brain_t >= 1 and len(w.brains) < d4["max_brains"][1]:
                 self.brain_t -= 1
                 x = w.rng.uniform(-w.half_width, w.half_width)
                 y = w.rng.uniform(w.ship.y + 6, w.top_y - 2)
@@ -89,12 +92,10 @@ class Endless(Level):
                 w.spawn_brain(x, y, w.u(d4["brain_size_px"]), w.rng.uniform(lo, hi), d4["damage_percent"],
                               d4["score_per_kill"])
         elif phase == "raiders" and not w.raiders:
-            d5 = lv["level_05"]
             for i in range(1 if diff < 2 else 2):
-                w.spawn_raider(w.rng.uniform(-w.half_width, w.half_width) * 0.7, w.top_y + 3 + i * 2,
-                               w.u(d5["raider_speed_px"]), d5["raider_fire_interval_s"], w.u(d5["raider_shot_speed_px"]),
-                               d5["shot_damage_percent"], d5["score_per_raider"])
+                w.spawn_raider(w.rng.uniform(-w.half_width, w.half_width) * 0.7, w.top_y + 3 + i * 2, self.raider)
         elif phase == "holes" and not w.holes and w.rng.random() < 0.25 * dt:
             d6 = lv["level_06"]
             w.spawn_hole(w.rng.uniform(-w.half_width, w.half_width) * 0.8, w.top_y + 4,
-                         w.u(w.rng.uniform(*d6["hole_speed_px"])), w.u(d6["hole_radius_px"]), d6["hole_pull"])
+                         w.u(w.rng.uniform(*d6["hole_speed_px"])), w.u(w.rng.uniform(*d6["hole_radius_px"])),
+                         d6["hole_pull"], breathe=d6["hole_breathe"])

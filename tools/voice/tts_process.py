@@ -59,9 +59,39 @@ def chorus(x, ms=14.0, depth_ms=3.0, rate=0.35, mix=0.35):
     return x * (1 - mix) + np.interp(idx, n, x) * mix
 
 
-def narrator(x, space=0.22, size=1.3):
-    """Deep, close, cinematic: warm low end, presence, compression, dark hall."""
-    x = hp(x, 70)
+def stretch(x, factor, win=1024, hop=256, tol=256):
+    """WSOLA time stretch (factor > 1 = longer), pitch unchanged: overlap-adds windowed frames, each
+    shifted (within tol samples) to line up with the previous one - keeps the voice's harmonics clean."""
+    w = np.hanning(win)
+    n_out = int(len(x) * factor)
+    out, norm = np.zeros(n_out + win), np.zeros(n_out + win)
+    x = np.pad(x, (tol, win + tol))
+    pos_out, prev = 0, None
+    while True:
+        pos_in = int(pos_out / factor) + tol
+        if pos_in + win + tol >= len(x) or pos_out >= n_out:
+            break
+        best = 0 if prev is None else int(np.argmax(np.correlate(x[pos_in - tol: pos_in + win + tol], prev, "valid"))) - tol
+        out[pos_out:pos_out + win] += x[pos_in + best: pos_in + best + win] * w
+        norm[pos_out:pos_out + win] += w
+        prev = x[pos_in + best + hop: pos_in + best + hop + win]
+        pos_out += hop
+    return out[:n_out] / np.maximum(norm[:n_out], 1e-3)
+
+
+def pitch_down(x, semitones):
+    """Lower pitch and formants together (a bigger, darker throat), keeping the duration."""
+    r = 2 ** (semitones / 12)
+    y = stretch(x, r)
+    return resample_poly(y, 1000, int(round(1000 * r)))[: len(x)]
+
+
+def narrator(x, space=0.16, size=1.3):
+    """Dark, close, cinematic: pitched down, heavy low end, a little grit, compression, dark hall."""
+    x = pitch_down(x, 3.0)
+    x = x + 0.08 * saturate(lp(x, 900), 3.0)  # chest rumble
+    x = lp(x, 7000)
+    x = hp(x, 60)
     x = x + lp(x, 180) * 0.6            # chest
     x = x + bp(x, 2500, 5000) * 0.25     # presence
     x = compress(x)

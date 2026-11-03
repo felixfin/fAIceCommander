@@ -98,8 +98,8 @@ class Hud:
         self.hint = OnscreenText("", parent=self.center, pos=(0, -0.1), scale=0.04, fg=GREY, **t)
         self.warning = OnscreenText("", parent=self.center, pos=(0, -0.3), scale=0.055, fg=RED, **t)
         self.menu = OnscreenText("", parent=self.center, pos=(0, -0.08), scale=0.055, fg=(0.9, 0.92, 1, 1), **t)
-        self.columns = [OnscreenText("", parent=self.center, pos=(x, 0.0), scale=0.036, fg=(0.85, 0.9, 1, 1), **t)
-                        for x in (-0.85, 0.0, 0.85)]
+        self.columns = [OnscreenText("", parent=self.center, pos=(x, 0.0), scale=0.032, fg=(0.85, 0.9, 1, 1), **t)
+                        for x in (-1.02, -0.34, 0.34, 1.02)]
         # control panel
         self.panel = base.aspect2d.attachNewNode("panel")
         self.panel_left = base.a2dBottomLeft.attachNewNode("panel-left")
@@ -158,7 +158,7 @@ class Hud:
         self.menu.setText("\n".join(lines))
 
     def set_columns(self, texts):
-        for col, text in zip(self.columns, list(texts) + [""] * 3):
+        for col, text in zip(self.columns, list(texts) + [""] * len(self.columns)):
             col.setText(text)
 
     def set_stats(self, hull, energy, score, level_name, progress):

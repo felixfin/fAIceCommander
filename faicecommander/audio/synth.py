@@ -155,9 +155,9 @@ def crash(dur=2.2):
 class Mixer:
     """Stereo bus of fixed length. Sound running past the end wraps to the start: stems loop seamlessly."""
 
-    def __init__(self, seconds):
+    def __init__(self, seconds, dtype=np.float64):
         self.n = int(round(seconds * SR))
-        self.buf = np.zeros((self.n, 2))
+        self.buf = np.zeros((self.n, 2), dtype)
 
     def add(self, start, sig, gain=1.0, pan=0.0):
         if sig.ndim == 1:

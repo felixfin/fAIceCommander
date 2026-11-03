@@ -7,6 +7,7 @@ window_size = [1600, 900]   # used when not fullscreen
 panel_height = 0.24         # webcam panel, fraction of the window height (F2 hides it)
 bloom = true
 play_intro = true          # skippable with SPACE, Esc or holding your mouth open
+webcam_background = true   # replace the room behind you with the cockpit (MediaPipe selfie segmenter)
 
 [camera]
 index = 0

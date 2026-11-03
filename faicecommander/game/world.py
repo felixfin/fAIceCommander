@@ -9,7 +9,8 @@ from .entities.asteroid import Asteroid, AsteroidLibrary
 from .entities.black_hole import BlackHole, BlackHoleTemplate, HoleBomb
 from .entities.brain import Brain, BrainLibrary
 from .entities.mothership import Mothership, MothershipModel
-from .entities.projectiles import BoltTemplate, LaserBolt, Nuke, NukeTemplate
+from .entities.mouse import MouseTemplate, SpaceMouse
+from .entities.projectiles import BoltTemplate, Flak, LaserBolt, Nuke, NukeTemplate
 from .entities.raider import EnemyShot, Raider, RaiderTemplate
 from .entities.ship import Ship
 from .weapons import Weapons
@@ -39,6 +40,7 @@ class World:
         self.rocks = AsteroidLibrary()
         self.brain_lib = BrainLibrary()
         self.raider_tpl = RaiderTemplate()
+        self.mouse_tpl = MouseTemplate()
         self.hole_tpl = BlackHoleTemplate()
         self.mother_model = MothershipModel()  # builds in the background
         self.bolt_tpl = BoltTemplate()
@@ -46,9 +48,9 @@ class World:
         self.fx_tpl = EffectTemplates()
         self.beam = Beam(self.root, self.fx_tpl)
         self.top_y, self.bottom_y = 22.0, -14.0
-        self.asteroids, self.brains, self.raiders = [], [], []
+        self.asteroids, self.brains, self.raiders, self.mice = [], [], [], []
         self.bolts, self.nukes, self.shots, self.holes, self.effects = [], [], [], [], []
-        self.bombs = []
+        self.bombs, self.flak = [], []
         self.mother = None
         self.scroll_mult = 1.0   # 0 while the ship holds position (boss fight)
         self.events = []
@@ -65,7 +67,7 @@ class World:
 
     @property
     def targets(self):
-        return [t for group in (self.asteroids, self.brains, self.raiders) for t in group if t.alive]
+        return [t for group in (self.asteroids, self.brains, self.raiders, self.mice) for t in group if t.alive]
 
     def set_bounds(self, top_y, bottom_y):
         """Visible extent of the play plane along y (from the camera)."""
@@ -75,8 +77,8 @@ class World:
         if self.mother is not None:
             self.mother.remove()
             self.mother = None
-        for group in (self.asteroids, self.brains, self.raiders, self.bolts, self.nukes, self.shots, self.holes,
-                      self.bombs):
+        for group in (self.asteroids, self.brains, self.raiders, self.mice, self.bolts, self.nukes, self.shots,
+                      self.holes, self.bombs, self.flak):
             for e in group:
                 e.remove()
             group.clear()
@@ -102,7 +104,8 @@ class World:
 
     # ------------------------------------------------------------ spawning
 
-    def spawn_asteroid(self, category, size_px, speed_px, spread_deg, damage, score, x=None, y=None, vel=None):
+    def spawn_asteroid(self, category, size_px, speed_px, spread_deg, damage, score, x=None, y=None, vel=None,
+                       wobble=0.0):
         r = self.u(self.rng.uniform(*size_px)) / 2
         if x is None:
             x = self.rng.uniform(-self.half_width, self.half_width)
@@ -112,7 +115,7 @@ class World:
             ang = math.radians(self.rng.uniform(-spread_deg, spread_deg))
             vel = (speed * math.sin(ang), -speed * math.cos(ang))
         a = Asteroid(self.root, self.rocks, self.rng, x, y, r, vel[0], vel[1], category, self.resist[category],
-                     damage, score)
+                     damage, score, wobble)
         self.asteroids.append(a)
         return a
 
@@ -121,11 +124,20 @@ class World:
         self.brains.append(b)
         return b
 
-    def spawn_raider(self, x, y, speed, fire_interval, shot_speed, shot_damage, score):
-        r = Raider(self.root, self.raider_tpl, self.rng, x, y, speed, fire_interval, shot_speed, shot_damage,
-                   self.resist["raider"], score)
+    def spawn_raider(self, x, y, spec):
+        """spec: see entities.raider.raider_spec()."""
+        r = Raider(self.root, self.raider_tpl, self.rng, x, y, spec, self.resist["raider"])
         self.raiders.append(r)
         return r
+
+    def throw_mouse(self, x, y, dx, dy, speed, turn_deg, damage, score):
+        self.mice.append(SpaceMouse(self.root, self.mouse_tpl, self.rng, x, y, dx, dy, speed, turn_deg, damage, score))
+        self.emit(("mouse_throw",))
+
+    def intercept(self, nuke, x, y, speed):
+        """The Mother's point defence: a flak shot that homes in on a nuke and sets it off early."""
+        self.flak.append(Flak(self.root, self.raider_tpl, x, y, nuke, speed))
+        self.emit(("flak",))
 
     def spawn_hole(self, x, y, vy, horizon, pull, **kw):
         h = BlackHole(self.root, self.hole_tpl, x, y, vy, horizon, pull, **kw)
@@ -151,9 +163,10 @@ class World:
     def fire_nuke(self, x, y):
         self.nukes.append(Nuke(self.root, self.nuke_tpl, x, y, self.nuke_speed, self.nuke_accel, self.nuke_fuse))
 
-    def fire_enemy(self, x, y, vx, vy, damage):
+    def fire_enemy(self, x, y, vx, vy, damage, source="raider", sound=True):
         self.shots.append(EnemyShot(self.root, self.raider_tpl, x, y, vx, vy, damage))
-        self.emit(("enemy_shot",))
+        if sound:
+            self.emit(("enemy_shot", source))
 
     def explode(self, x, y, size):
         d = math.hypot(x - self.ship.x, y - self.ship.y)
@@ -166,37 +179,59 @@ class World:
 
     # ------------------------------------------------------------ simulation
 
+    GROUPS = ("asteroids", "brains", "raiders", "mice", "bolts", "nukes", "shots", "holes", "bombs", "flak")
+
+    def _prune(self):
+        """Drop removed entities (levels may remove some between frames, e.g. when the Mother dies)."""
+        for name in self.GROUPS:
+            setattr(self, name, [e for e in getattr(self, name) if e.alive])
+
     def update(self, dt, ctl):
+        self._prune()
         ship = self.ship
         drift = sum(h.drift(ship.x, ship.y, ship.max_speed * 2) for h in self.holes if h.alive)
+        drift += sum(r.pull(ship.x) for r in self.raiders if r.alive)
         ship.update(dt, ctl.steer, self.half_width, drift)
         self.weapons.update(dt, ctl, ship, self)
         ship.hull = min(100.0, ship.hull + self.hull_regen * dt)
-        for b in self.bolts:
+        for b in live(self.bolts):
             b.update(dt)
             if b.y > self.top_y + 2:
                 b.remove()
-        for n in self.nukes:
+        for n in live(self.nukes):
             n.update(dt)
         margin = self.half_width + 6
-        for a in self.asteroids:
-            for h in self.holes:
+        for a in live(self.asteroids):
+            for h in live(self.holes):
                 a.vx += h.drift(a.x, a.y, 20.0) * dt * 1.5
             a.update(dt, self.speed)
             if a.y < self.bottom_y - 3 or abs(a.x) > margin:
                 a.remove()
-        for b in self.brains:
-            b.update(dt, self.speed)
+        for b in live(self.brains):
+            b.update(dt, self.speed, ship.x)
             if b.expired or b.y < self.bottom_y - 2:
                 b.remove()
         bounds = self.raider_bounds()
-        for r in self.raiders:
-            r.update(dt, ship, bounds, self.raiders, self.fire_enemy)
-        for s in self.shots:
+        for r in live(self.raiders):
+            r.update(dt, ship, bounds, self.raiders, self)
+        for m in live(self.mice):
+            m.update(dt, ship, self.speed)
+            if m.y < self.bottom_y - 2 or m.y > self.top_y + 6 or abs(m.x) > margin:
+                m.remove()
+        for f in live(self.flak):
+            f.update(dt)
+            if f.reached:
+                f.remove()
+                if f.target.alive:
+                    self._detonate(f.target)
+                    self.emit(("intercepted",))
+            elif not f.target.alive:
+                f.remove()
+        for s in live(self.shots):
             s.update(dt)
             if s.y < self.bottom_y - 2 or s.y > self.top_y + 3 or abs(s.x) > margin:
                 s.remove()
-        for b in self.bombs:
+        for b in live(self.bombs):
             b.update(dt)
             if b.arrived:
                 b.remove()
@@ -207,8 +242,7 @@ class World:
         self._update_beam(dt)
         self._update_nukes(dt)
         self._collide()
-        for name in ("asteroids", "brains", "raiders", "bolts", "nukes", "shots", "holes", "bombs"):
-            setattr(self, name, [e for e in getattr(self, name) if e.alive])
+        self._prune()
         alive = []
         for fx in self.effects:
             if isinstance(fx, Explosion) and fx.boom_due(ship.x, ship.y):
@@ -220,7 +254,7 @@ class World:
     def _update_holes(self, dt):
         ship = self.ship
         self.hole_proximity = 0.0
-        for h in self.holes:
+        for h in live(self.holes):
             h.update(dt, self.speed)
             if h.y < self.bottom_y - 6:
                 h.remove()
@@ -255,7 +289,11 @@ class World:
                 self.emit(("splatter", (t.x, t.y, 0.3)))
             return
         if t.kind == "raider":
-            self.explode(t.x, t.y, 2.2)
+            self.explode(t.x, t.y, 1.8)
+            return
+        if t.kind == "mouse":
+            self.explode(t.x, t.y, 0.5)
+            self.emit(("squeak",))
             return
         self.explode(t.x, t.y, 0.6 + t.radius * (1.0 if t.category == 1 else 1.3))
         if t.category == 2 and cause != "nuke" and self.split:
@@ -294,6 +332,8 @@ class World:
     def _update_nukes(self, dt):
         self._puff_t += dt
         for n in self.nukes:
+            if not n.alive:  # set off by flak this frame
+                continue
             if self._puff_t > 0.025:
                 self.effects.append(Puff(self.root, (n.x, n.y - 0.6, 0.1), self.rng))
             hit = any((t.x - n.x) ** 2 + (t.y - n.y) ** 2 < (t.radius + n.radius) ** 2 for t in self.targets)
@@ -314,7 +354,7 @@ class World:
         if m is not None and (m.contains(n.x, n.y + self.nuke_radius) or m.contains(n.x, n.y)):
             if m.hurt("nuke", n.x):
                 self._mother_down()
-        for s in self.shots:
+        for s in live(self.shots):
             if math.hypot(s.x - n.x, s.y - n.y) < self.nuke_radius:
                 s.remove()
 
@@ -352,9 +392,12 @@ class World:
                 if t.kind == "brain":
                     self.effects.append(BrainBurst(self.root, self.fx_tpl, (t.x, t.y, 0.3), 1.0, self.rng))
                     self.emit(("splatter", (t.x, t.y, 0.3)))
+                elif t.kind == "mouse":
+                    self.explode(t.x, t.y, 0.5)
+                    self.emit(("squeak",))
                 else:
                     self.explode(t.x, t.y, 0.4 + t.radius * 0.7)
-        for s in self.shots:
+        for s in live(self.shots):
             if (s.x - ship.x) ** 2 + (s.y - ship.y) ** 2 < (s.radius + ship.radius) ** 2:
                 s.remove()
                 self._hit_ship(s.damage)
@@ -365,6 +408,11 @@ class World:
         if self.ship.hull <= 0 and self.death_cause is None:
             self.death_cause = "hull"
         self.emit(("hit", dmg))
+
+
+def live(group):
+    """Entities still alive: something earlier in the frame (a nuke, the Mother's death) may have removed some."""
+    return [e for e in group if e.alive]
 
 
 def radius_on_axis(t, x):

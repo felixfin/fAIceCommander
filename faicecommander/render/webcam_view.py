@@ -1,4 +1,5 @@
-"""Mirrored webcam image with the AR life-support helmet anchored to the player's face.
+"""Mirrored webcam image with the AR life-support helmet anchored to the player's face, and - where
+the person mask says "background" - the live cockpit scene (render/cockpit.py) instead of the room.
 
 The helmet pose is built directly from 3D face landmarks (eye corners, forehead, chin), so it
 stays independent of MediaPipe's camera conventions: x right, y down, depth away from the camera.
@@ -6,17 +7,18 @@ stays independent of MediaPipe's camera conventions: x right, y down, depth away
 import numpy as np
 from panda3d.core import (
     AmbientLight, Camera, CardMaker, DirectionalLight, LMatrix4f, Material, NodePath, OrthographicLens,
-    Texture,
+    Texture, TextureStage, TransparencyAttrib,
 )
 
 from ..input.face_tracker import CHIN, EYE_OUTER_LEFT, EYE_OUTER_RIGHT, FOREHEAD
 from . import models as M
+from .cockpit import Cockpit
 
 HELMET_EYE_SPAN = 0.95  # distance between the outer eye corners in helmet units
 
 
 class WebcamView:
-    def __init__(self, base):
+    def __init__(self, base, background=True):
         self.base = base
         self.scene = NodePath("webcam-scene")
         self.scene.setShaderAuto()
@@ -44,7 +46,7 @@ class WebcamView:
         self.region.setClearColor((0.02, 0.03, 0.05, 1))
         self.region.setClearDepthActive(True)
         self.tex = Texture("webcam")
-        self.tex.setup2dTexture(*self.size, Texture.T_unsigned_byte, Texture.F_rgb)
+        self.tex.setup2dTexture(*self.size, Texture.T_unsigned_byte, Texture.F_rgba)
         cm = CardMaker("webcam-card")
         cm.setFrame(-0.5, 0.5, -0.5, 0.5)
         self.card = self.scene.attachNewNode(cm.generate())
@@ -52,9 +54,20 @@ class WebcamView:
         self.card.setLightOff(1)
         self.card.setY(5000)
         self.card.setScale(self.size[0], 1, self.size[1])
-        self.card.setColorScale(0.75, 0.95, 1.0, 1)  # cool cyberpunk grade
+        self.card.setColorScale(0.8, 0.95, 1.0, 1)  # cool cyberpunk grade
+        self.card.setTransparency(TransparencyAttrib.MAlpha)
         self.card.hide()
-        self.helmet = M.build_helmet(self.scene)
+        self.cockpit = Cockpit(base) if background else None
+        self.back = self.scene.attachNewNode(cm.generate())  # the cockpit, behind the cut-out player
+        self.back.setLightOff(1)
+        self.back.setY(5500)
+        self.back.setScale(self.size[0], 1, self.size[1])
+        if self.cockpit is not None:
+            self.back.setTexture(self.cockpit.tex)
+            self.back.setTexScale(TextureStage.getDefault(), self.cockpit.tex.getTexScale())  # padded buffers
+        self.back.hide()
+        self.alpha = None
+        self.helmet = M.cached("helmet", M.build_helmet).getChild(0).copyTo(self.scene)
         self.helmet.hide()
         self.cigar = self.helmet.find("**/cigar")
         self.cigar_rest = self.cigar.getPos()
@@ -69,20 +82,33 @@ class WebcamView:
         if (w, h) != self.size:
             self.size = (w, h)
             self.lens.setFilmSize(w, h)
-            self.tex.setup2dTexture(w, h, Texture.T_unsigned_byte, Texture.F_rgb)
+            self.tex.setup2dTexture(w, h, Texture.T_unsigned_byte, Texture.F_rgba)
             self.card.setScale(w, 1, h)
+            self.back.setScale(w, 1, h)
+            self.alpha = None
 
-    def update(self, face, controls):
+    def update(self, face, controls, dt=0.0, shake=0.0, hypno=0.0):
         if face is None or face.frame is None:
             self.card.hide()
+            self.back.hide()
             self.helmet.hide()
             return
         h, w = face.frame.shape[:2]
         self._ensure_size(w, h)
+        masked = face.mask is not None and self.cockpit is not None
         if face.frame_id != self._frame_id:
             self._frame_id = face.frame_id
-            self.tex.setRamImage(np.ascontiguousarray(face.frame[::-1]).tobytes())  # BGR, bottom-up
+            if self.alpha is None or self.alpha.shape[:2] != (h, w):
+                self.alpha = np.full((h, w, 4), 255, np.uint8)
+            self.alpha[..., :3] = face.frame
+            self.alpha[..., 3] = face.mask if masked else 255
+            self.tex.setRamImage(np.ascontiguousarray(self.alpha[::-1]).tobytes())  # BGRA, bottom-up
         self.card.show()
+        if masked:
+            self.back.show()
+            self.cockpit.update(dt, shake, hypno)
+        else:
+            self.back.hide()
         if not face.found or face.landmarks is None:
             self.helmet.hide()
             return

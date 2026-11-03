@@ -52,3 +52,17 @@ class Level:
 
     def spawn(self, dt):
         raise NotImplementedError
+
+    def ramp(self, key):
+        """A [start, end] value from the data, interpolated over the level's progress."""
+        lo, hi = self.data[key]
+        return lo + (hi - lo) * self.progress
+
+    def keep_rocks(self, count, category=1, size="asteroid_size_px", damage="damage_percent",
+                   score="score_per_kill", spread=1.0):
+        """Tops the field up to count asteroids of a category (paths bend by asteroid_wobble_px)."""
+        d, w = self.data, self.world
+        wobble = w.u(d.get("asteroid_wobble_px", 0))
+        while w.count(category) < count:
+            w.spawn_asteroid(category, d[size], d["asteroid_speed_px"], d["asteroid_spread_deg"] * spread, d[damage],
+                             d[score], wobble=wobble)

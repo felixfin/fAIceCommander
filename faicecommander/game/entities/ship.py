@@ -10,7 +10,7 @@ class Ship:
     def __init__(self, parent, cfg, units):
         self.node = parent.attachNewNode("ship")
         self.scale = cfg["world.ship_scale"]
-        self.model = M.build_ship(self.node)
+        self.model = M.cached("ship", M.build_ship).getChild(0).copyTo(self.node)
         self.model.setScale(self.scale)
         self.radius = units(cfg["world.ship_radius_px"])
         self.max_speed = units(cfg["world.ship_max_speed_px"])
@@ -39,7 +39,7 @@ class Ship:
 
     @property
     def prow_y(self):
-        return self.y + 2.25 * self.scale
+        return self.y + M.SHIP_PROW * self.scale
 
     def update(self, dt, steer, half_width, drift=0.0):
         """drift: sideways speed forced on the ship (black hole pull), added to its own movement."""
