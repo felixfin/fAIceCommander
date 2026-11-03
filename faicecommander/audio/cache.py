@@ -9,7 +9,7 @@ from scipy.io import wavfile
 from . import sfx_bank, tracks
 from .synth import SR
 
-AUDIO_VERSION = "m3-1"  # bump when the synth code changes to re-render the cache
+AUDIO_VERSION = "m4-1"  # bump when the synth code changes to re-render the cache
 
 
 def cache_dir():

@@ -4,5 +4,6 @@ from .level_03_hypno_nebula import HypnoNebula
 from .level_04_the_void import TheVoid
 from .level_05_patrol import Patrol
 from .level_06_event_horizon import EventHorizon
+from .level_07_the_mother import TheMother
 
-LEVELS = [AsteroidBelt, DebrisField, HypnoNebula, TheVoid, Patrol, EventHorizon]
+LEVELS = [AsteroidBelt, DebrisField, HypnoNebula, TheVoid, Patrol, EventHorizon, TheMother]

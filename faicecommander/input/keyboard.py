@@ -1,6 +1,6 @@
 """Keyboard fallback (development, testing, playing without a webcam).
 
-Left/Right or A/D steer, Space = open mouth, Q/E = previous/next weapon, C = close eyes.
+Left/Right or A/D steer, Space = open mouth, Q/E or Up/Down = previous/next weapon (menu item), C = close eyes.
 """
 from panda3d.core import KeyboardButton
 
@@ -12,7 +12,7 @@ class KeyboardControls:
         self.base = base
         self._space = False
         self._steps = []
-        for key, step in (("q", -1), ("e", 1)):
+        for key, step in (("q", -1), ("e", 1), ("arrow_up", -1), ("arrow_down", 1)):
             base.accept(key, self._steps.append, [step])
 
     def _down(self, *keys):

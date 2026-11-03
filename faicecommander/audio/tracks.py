@@ -320,6 +320,104 @@ def track_event_horizon():
     return stems
 
 
+def choir(m, start, dur, chord, gain, vowel="a"):
+    """Synthetic choir: detuned saws through vowel formant filters, slow swell."""
+    formants = {"a": (800, 1150, 2900), "o": (450, 800, 2830), "u": (325, 700, 2530)}[vowel]
+    t = t_arr(dur)
+    src = sum(saw(f * (1 + d) * (1 + 0.004 * np.sin(2 * np.pi * (4.5 + d * 40) * t)), t, ph0=np.random.random())
+              for f in chord for d in (-0.006, 0.0, 0.005))
+    voice = sum(bp(src, f * 0.85, f * 1.15) * g for f, g in zip(formants, (1.0, 0.6, 0.25)))
+    env = np.minimum(1, t / 1.2) * np.minimum(1, (dur - t) / 1.0)
+    s = reverb(pad_tail(voice * env, 3.0), 0.55)
+    m.add(start, s, gain, -0.3)
+    m.add(start + 0.013, s, gain, 0.3)
+
+
+def brass(m, start, dur, f, gain):
+    t = t_arr(dur)
+    env = np.minimum(1, t / 0.08) * np.minimum(1, (dur - t) / 0.15)
+    cutoff = 400 + 2600 * np.minimum(1, t / 0.25)
+    s = sweep_lp(saw(f, t) + saw(f * 1.004, t) + 0.5 * saw(f / 2, t), cutoff, q=0.8) * env
+    m.add(start, reverb(pad_tail(s, 1.5), 0.3), gain, 0.1)
+
+
+def track_mother():
+    """Level 7: the boss - DnB that drops into half time, choir, brass hits, wobble bass."""
+    rng(8)
+    np.random.seed(8)
+    st = {k: Mixer(LOOP) for k in ("drums", "bass", "arp", "pad", "lead", "choir")}
+    roots = ["D1", "D1", "Bb1", "Bb1", "G1", "G1", "A1", "A1"] * 2
+    for b in range(BARS):
+        half = (b // 4) % 2 == 1  # 4 bars DnB, 4 bars half time
+        if half:
+            _halftime_drums(st["drums"], b, fill=(b % 4 == 3))
+            wobble(st["bass"], b * BAR, BAR * 0.98, note(roots[b]), (4, 2, 3, 1.5)[b % 4], 0.3,
+                   bend=0.5 if b % 4 == 3 else 0.0)
+        else:
+            _dnb_drums(st["drums"], b, fill=(b % 4 == 3), heavy=True)
+            for s0, ln in ((0, 6), (6, 4), (10, 6)):
+                reese(st["bass"], b * BAR + s0 * STEP, ln * STEP * 0.95, note(roots[b]), 0.32, cutoff=500)
+        seq = ["D5", "A4", "F5", "A4", "D5", "A4", "G5", "A4", "D5", "A4", "F5", "A4", "E5", "C5", "A4", "E5"]
+        arp(st["arp"], b, seq, 0.16)
+    chords = [("D3", "F3", "A3", "D4"), ("Bb2", "D3", "F3", "Bb3"), ("G2", "Bb2", "D3", "G3"), ("A2", "Db3", "E3", "A3")]
+    for i in range(BARS // 2):
+        ch = [note(n) for n in chords[i % 4]]
+        supersaw_pad(st["pad"], i * 2 * BAR, 2 * BAR + 0.5, ch, 0.025)
+        choir(st["choir"], i * 2 * BAR, 2 * BAR + 0.6, [c * 2 for c in ch], 0.12, "a" if i % 2 == 0 else "o")
+    for rep in range(4):
+        for s0, n, ln in ((0, "D4", 3), (3, "D4", 1), (4, "F4", 4), (8, "A4", 6), (14, "G4", 2)):
+            brass(st["lead"], rep * 4 * BAR + s0 * STEP * 4, ln * STEP * 4 * 0.95, note(n), 0.12)
+    stems = master({k: m.buf for k, m in st.items()})
+    stems["heartbeat"] = heartbeat_stem(88) * 0.5
+    return stems
+
+
+def track_cinematic():
+    """Intro: dark and cinematic - low drones, war drums, choir, a slow pulse."""
+    rng(9)
+    np.random.seed(9)
+    st = {k: Mixer(LOOP) for k in ("drone", "drums", "choir", "pulse")}
+    t = t_arr(LOOP)
+    drone = sine(note("C1"), t) * 0.7 + saw(note("C2") * 1.002, t) * 0.1 + saw(note("G2") * 0.998, t) * 0.07
+    st["drone"].add(0, lp(drone, 220) * (0.75 + 0.25 * np.sin(2 * np.pi * t / LOOP * 2)), 1.0)
+    for b in range(BARS):
+        for s0, g in ((0, 1.0), (6, 0.6), (8, 0.8), (14, 0.5)):
+            tb = t_arr(1.0)
+            taiko = sine(55 + 50 * np.exp(-tb * 18), tb) * np.exp(-tb * 5) + lp(noise(len(tb)), 600) * np.exp(-tb * 20) * 0.4
+            st["drums"].add(b * BAR + s0 * STEP * 2, taiko, g * (0.5 if b < 4 else 1.0))
+        st["pulse"].add(b * BAR, sine(note("C2"), t_arr(0.5)) * np.exp(-t_arr(0.5) * 6), 0.4)
+    for i, ch in enumerate((("C3", "G3", "Eb4"), ("Ab2", "Eb3", "C4"), ("F2", "C3", "Ab3"), ("G2", "D3", "Bb3"))):
+        choir(st["choir"], i * 4 * BAR, 4 * BAR + 0.6, [note(n) for n in ch], 0.14, "u" if i % 2 else "o")
+    return master({k: m.buf for k, m in st.items()}, 0.8)
+
+
+def track_victory():
+    """Outro: hopeful - warm pads, rising arps, a calm beat, choir in major."""
+    rng(10)
+    np.random.seed(10)
+    st = {k: Mixer(LOOP) for k in ("drums", "pad", "arp", "choir", "lead")}
+    chords = [("C3", "E3", "G3", "C4"), ("A2", "C3", "E3", "A3"), ("F2", "A2", "C3", "F3"), ("G2", "B2", "D3", "G3")]
+    for b in range(BARS):
+        t0 = b * BAR
+        st["drums"].add(t0, kick(0.8), 0.6)
+        st["drums"].add(t0 + 8 * STEP, kick(0.8), 0.5)
+        st["drums"].add(t0 + 4 * STEP, snare(200, 8000), 0.25)
+        st["drums"].add(t0 + 12 * STEP, snare(200, 8000), 0.25)
+        for s0 in range(0, 16, 2):
+            st["drums"].add(t0 + s0 * STEP, hat(), 0.1, 0.3)
+        ch = chords[(b // 4) % 4]
+        seq = [ch[k % 4][:-1] + str(int(ch[k % 4][-1]) + 2) for k in (0, 1, 2, 3, 2, 1, 2, 3)] * 2
+        arp(st["arp"], b, seq, 0.08, cutoff=4500)
+    for i in range(BARS // 4):
+        c = [note(n) for n in chords[i % 4]]
+        supersaw_pad(st["pad"], i * 4 * BAR, 4 * BAR + 0.5, c, 0.03)
+        choir(st["choir"], i * 4 * BAR, 4 * BAR + 0.6, [x * 2 for x in c], 0.045, "a")
+    for n, s0, ln in (("E5", 0, 8), ("D5", 8, 4), ("C5", 12, 4), ("E5", 16, 8), ("G5", 24, 8),
+                      ("A5", 32, 8), ("G5", 40, 4), ("E5", 44, 4), ("D5", 48, 16)):
+        lead(st["lead"], s0 * STEP * 4, ln * STEP * 4 * 0.95, note(n), 0.06, vibrato=4.0)
+    return master({k: m.buf for k, m in st.items()})
+
+
 TRACKS = {
     "void": track_void,
     "neural_breaks": track_neural_breaks,
@@ -328,8 +426,12 @@ TRACKS = {
     "void_brains": track_void_brains,
     "patrol": track_patrol,
     "event_horizon": track_event_horizon,
+    "mother": track_mother,
+    "cinematic": track_cinematic,
+    "victory": track_victory,
 }
 
 TITLES = {"void": "THE VOID", "neural_breaks": "NEURAL BREAKS", "debris": "DEBRIS RUNNER",
           "hypno": "HYPNO NEBULA", "void_brains": "NOTHING ANSWERS", "patrol": "PATROL",
-          "event_horizon": "EVENT HORIZON"}
+          "event_horizon": "EVENT HORIZON", "mother": "MOTHER OF CATS", "cinematic": "LAST HOPE",
+          "victory": "HONOR"}

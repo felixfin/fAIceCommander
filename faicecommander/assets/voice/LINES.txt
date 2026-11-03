@@ -1,0 +1,18 @@
+Optional voice-over. Put a WAV file named <id>.wav (mono or stereo, any sample rate) into this folder
+and the cutscene plays it together with the caption. Missing files are simply skipped.
+
+intro_01: For centuries, humanity has been at war with the Catliens.
+intro_02: Feline. Brilliant. Merciless. Their swarms have burned world after world.
+intro_03: Most of us are slaves now - pets of the higher castes.
+intro_04: They neuter the males. They milk the females.
+intro_05: One mind steers the swarm: the Mother. Destroy her, and the swarm falls into chaos.
+intro_06: Commander James Nathaniel Honor found her. His fleet struck hard.
+intro_07: Her hyperdrive failed. But his fleet was lost.
+intro_08: AI surgeon: Only the head and part of the torso could be saved.
+intro_09: We built him a ship from the wreckage. There is nothing left for another attempt.
+intro_10: Commander? Can you hear me? You don't know who you are. But you know the way. Star by star.
+intro_11: FaceCommander - you are our last hope!
+outro_01: The Mother is dead.
+outro_02: Across the galaxy, the swarm loses its mind.
+outro_03: On a thousand worlds, the collars fall.
+outro_04: My name is... James Nathaniel Honor.

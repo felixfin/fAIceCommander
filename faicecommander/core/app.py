@@ -10,6 +10,8 @@ from panda3d.core import (
 
 from ..audio import AudioSystem
 from ..game.levels import LEVELS
+from ..game.levels.endless import Endless
+from ..game.save import SaveData
 from ..game.world import World
 from ..input.face_tracker import FaceTracker
 from ..input.gestures import Controls, GestureMapper
@@ -19,7 +21,7 @@ from ..render.effects import ScreenFlash
 from ..render.hud import Hud
 from ..render.overlays import HypnoOverlay, SplatterOverlay
 from ..render.webcam_view import WebcamView
-from .states import TitleState
+from .states import HighscoreState, IntroState, MenuState, NameEntryState, PlayState
 
 GAME_VFOV = 44.0
 
@@ -32,6 +34,11 @@ class App(ShowBase):
         self.setBackgroundColor(0.02, 0.025, 0.04, 1)
         self.win.setClearColor((0.02, 0.025, 0.04, 1))
         self.panel_visible = True
+        self.cam_full = False
+        self.save = SaveData()
+        self.mode = "easy"
+        self.calibrated = False
+        self.text_input = False
         self._setup_scene()
         self.tracker = FaceTracker(cfg)
         self.tracker_ok = (not args.no_camera) and self.tracker.start()
@@ -56,16 +63,24 @@ class App(ShowBase):
         self.autopilot = Autopilot() if args.autopilot else None
         self.accept("f2", self.toggle_panel)
         self.accept("f11", self.toggle_fullscreen)
-        self.accept("escape", self.userExit)
-        self.accept("p", self._flag, ["_pause"])
+        self.accept("escape", self.on_escape)
+        self.accept("p", lambda: None if self.text_input else self._flag("_pause"))
         self.accept("enter", self._flag, ["_skip"])
-        self.accept("m", self.audio.toggle_mute)
+        self.accept("m", lambda: None if self.text_input else self.audio.toggle_mute())
+        if self.buttonThrowers:  # typed characters for the highscore name (no input on offscreen buffers)
+            self.buttonThrowers[0].node().setKeystrokeEvent("keystroke")
         self.accept("window-event", self.on_window_event)
         if cfg["display.fullscreen"] and not args.windowed and not args.offscreen:
             self.toggle_fullscreen(force=True)
         self.layout()
         self.state = None
-        self.change(TitleState)
+        if args.autopilot or args.level > 1:  # straight into the action (practice, tests)
+            self.calibrated = True
+            self.start_run("easy", args.level - 1)
+        elif cfg.get("display.play_intro", True):
+            self.change(IntroState)
+        else:
+            self.change(MenuState)
         self.taskMgr.add(self.update, "update")
         self._t0 = time.monotonic()
 
@@ -120,9 +135,12 @@ class App(ShowBase):
                 if region.getCamera() == self.cam and region is not self.camNode.getDisplayRegion(0):
                     region.setDimensions(0, 1, pf, 1)
         cam_w = (pf * h * 4 / 3) / w
-        if pf > 0:
+        if self.cam_full:  # cutscene close-up: the webcam fills the game area
+            full_w = min(1.0, ((1 - pf) * h * 4 / 3) / w)
+            self.webcam.set_rect(0.5 - full_w / 2, 0.5 + full_w / 2, pf, 1.0)
+        elif pf > 0:
             self.webcam.set_rect(0.5 - cam_w / 2, 0.5 + cam_w / 2, 0.0, pf)
-        self.webcam.region.setActive(pf > 0 and self.tracker_ok)
+        self.webcam.region.setActive((pf > 0 or self.cam_full) and self.tracker_ok)
         self.hud.layout(pf, self.panel_visible)
         self.hud.cam_note.setText("" if self.tracker_ok else "WEBCAM OFF\nkeyboard mode")
         self.flash.fit(-1 + 2 * pf)
@@ -163,26 +181,51 @@ class App(ShowBase):
 
     # ------------------------------------------------------------ state machine & helpers
 
-    def change(self, state_cls):
+    def change(self, state):
+        """state: a State class, or an already constructed State."""
         if self.state is not None:
             self.state.exit()
-        self.state = state_cls(self)
+        self.state = state(self) if isinstance(state, type) else state
         self.state.enter()
 
+    def on_escape(self):
+        self.state.on_escape()
+
+    def webcam_fullscreen(self, on):
+        self.cam_full = on
+        self.layout()
+
     def make_level(self):
-        cls = LEVELS[self.level_index]
         self.level_start_score = self.world.score
+        if self.mode == "endless":
+            return Endless(self.world, self.levels_cfg["endless"], self.levels_cfg)
+        cls = LEVELS[self.level_index]
         return cls(self.world, self.levels_cfg[cls.key])
+
+    def start_run(self, mode, level_index=0):
+        self.mode = mode
+        self.level_index = level_index
+        self.world.score = 0.0
+        self.change(PlayState)
+
+    def end_run(self, victory=False):
+        """Leave the current run: highscore entry if it qualifies, then the menu."""
+        score = int(self.world.score)
+        if self.mode == "endless":
+            lvl = getattr(self.state, "level", None)
+            reached = f"{int(lvl.elapsed // 60)}m{int(lvl.elapsed % 60):02d}s" if lvl else "-"
+        else:
+            reached = "WON" if victory else f"L{self.level_index + 1}"
+        if self.mode != "practice" and self.save.qualifies(self.mode, score):
+            self.change(NameEntryState(self, self.mode, score, reached))
+        elif victory:
+            self.change(HighscoreState)
+        else:
+            self.change(MenuState)
 
     def restart_level(self):
         """Easy mode: retry the current level with the score it started with."""
         self.world.score = self.level_start_score
-
-    def next_level(self):
-        self.level_index += 1
-        if self.level_index >= self.level_count:  # end of the content so far: start over
-            self.level_index = 0
-            self.world.score = 0.0
 
     def shake(self, amount):
         self.shake_amount = max(self.shake_amount, amount)
@@ -228,8 +271,9 @@ class App(ShowBase):
         self.splatter.update(dt)
         self.audio.update(dt)
         self.shake_amount = max(0.0, self.shake_amount - dt * 2.5)
-        s = self.shake_amount ** 2 * 0.35
-        self.camera.setPos(self.cam_base + (random.uniform(-s, s), random.uniform(-s, s), random.uniform(-s, s)))
+        if not self.state.cinematic:  # cutscenes move the camera themselves
+            s = self.shake_amount ** 2 * 0.35
+            self.camera.setPos(self.cam_base + (random.uniform(-s, s), random.uniform(-s, s), random.uniform(-s, s)))
         moving = self.state.scrolling and not getattr(self.state, "halted", False)
         self.backdrop.update(dt, self.world.scroll if moving else self.world.scroll * 0.15)
         if self.args.screenshot and time.monotonic() - self._t0 > self.args.autopilot:

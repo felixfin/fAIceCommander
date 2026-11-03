@@ -9,6 +9,7 @@ class Patrol(Level):
     unlocked = ("laser", "beam", "nuke", "shield")
     nukes = 3
     banner = "Catlien raiders incoming - destroy both"
+    progress_label = "RAIDERS"
 
     def start(self):
         super().start()

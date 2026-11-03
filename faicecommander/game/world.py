@@ -6,8 +6,9 @@ import numpy as np
 from ..config import Units
 from ..render.effects import Beam, BrainBurst, EffectTemplates, Explosion, Puff
 from .entities.asteroid import Asteroid, AsteroidLibrary
-from .entities.black_hole import BlackHole, BlackHoleTemplate
+from .entities.black_hole import BlackHole, BlackHoleTemplate, HoleBomb
 from .entities.brain import Brain, BrainLibrary
+from .entities.mothership import Mothership, MothershipModel
 from .entities.projectiles import BoltTemplate, LaserBolt, Nuke, NukeTemplate
 from .entities.raider import EnemyShot, Raider, RaiderTemplate
 from .entities.ship import Ship
@@ -39,6 +40,7 @@ class World:
         self.brain_lib = BrainLibrary()
         self.raider_tpl = RaiderTemplate()
         self.hole_tpl = BlackHoleTemplate()
+        self.mother_model = MothershipModel()  # builds in the background
         self.bolt_tpl = BoltTemplate()
         self.nuke_tpl = NukeTemplate()
         self.fx_tpl = EffectTemplates()
@@ -46,12 +48,20 @@ class World:
         self.top_y, self.bottom_y = 22.0, -14.0
         self.asteroids, self.brains, self.raiders = [], [], []
         self.bolts, self.nukes, self.shots, self.holes, self.effects = [], [], [], [], []
+        self.bombs = []
+        self.mother = None
+        self.scroll_mult = 1.0   # 0 while the ship holds position (boss fight)
         self.events = []
         self.score = 0.0
         self.split = None        # set by levels with category 2 asteroids
         self.death_cause = None  # "hull" or "absorbed"
         self.hole_proximity = 0.0
         self._puff_t = 0.0
+
+    @property
+    def speed(self):
+        """Current forward speed (constant thrust, stopped for the boss)."""
+        return self.scroll * self.scroll_mult
 
     @property
     def targets(self):
@@ -62,7 +72,11 @@ class World:
         self.top_y, self.bottom_y = top_y, bottom_y
 
     def reset(self, unlocked=("laser", "shield"), nukes=0):
-        for group in (self.asteroids, self.brains, self.raiders, self.bolts, self.nukes, self.shots, self.holes):
+        if self.mother is not None:
+            self.mother.remove()
+            self.mother = None
+        for group in (self.asteroids, self.brains, self.raiders, self.bolts, self.nukes, self.shots, self.holes,
+                      self.bombs):
             for e in group:
                 e.remove()
             group.clear()
@@ -77,6 +91,7 @@ class World:
         self.split = None
         self.death_cause = None
         self.hole_proximity = 0.0
+        self.scroll_mult = 1.0
 
     def emit(self, event):
         self.events.append(event)
@@ -112,10 +127,20 @@ class World:
         self.raiders.append(r)
         return r
 
-    def spawn_hole(self, x, y, vy, horizon, pull):
-        h = BlackHole(self.root, self.hole_tpl, x, y, vy, horizon, pull)
+    def spawn_hole(self, x, y, vy, horizon, pull, **kw):
+        h = BlackHole(self.root, self.hole_tpl, x, y, vy, horizon, pull, **kw)
         self.holes.append(h)
         return h
+
+    def spawn_mother(self, x, y, width, speed, data):
+        self.mother = Mothership(self.root, self.mother_model.get(), x, y, width, speed, self.rng, data)
+        return self.mother
+
+    def fire_bomb(self, x, y, tx, ty, speed, on_arrival):
+        b = HoleBomb(self.root, self.hole_tpl, x, y, tx, ty, speed)
+        b.on_arrival = on_arrival
+        self.bombs.append(b)
+        self.emit(("bomb",))
 
     def count(self, category):
         return sum(1 for a in self.asteroids if a.alive and a.category == category)
@@ -157,11 +182,11 @@ class World:
         for a in self.asteroids:
             for h in self.holes:
                 a.vx += h.drift(a.x, a.y, 20.0) * dt * 1.5
-            a.update(dt, self.scroll)
+            a.update(dt, self.speed)
             if a.y < self.bottom_y - 3 or abs(a.x) > margin:
                 a.remove()
         for b in self.brains:
-            b.update(dt, self.scroll)
+            b.update(dt, self.speed)
             if b.expired or b.y < self.bottom_y - 2:
                 b.remove()
         bounds = self.raider_bounds()
@@ -171,11 +196,18 @@ class World:
             s.update(dt)
             if s.y < self.bottom_y - 2 or s.y > self.top_y + 3 or abs(s.x) > margin:
                 s.remove()
+        for b in self.bombs:
+            b.update(dt)
+            if b.arrived:
+                b.remove()
+                b.on_arrival(b.x, b.y)
+        if self.mother is not None:
+            self.mother.update(dt, self.half_width * 0.75)
         self._update_holes(dt)
         self._update_beam(dt)
         self._update_nukes(dt)
         self._collide()
-        for name in ("asteroids", "brains", "raiders", "bolts", "nukes", "shots", "holes"):
+        for name in ("asteroids", "brains", "raiders", "bolts", "nukes", "shots", "holes", "bombs"):
             setattr(self, name, [e for e in getattr(self, name) if e.alive])
         alive = []
         for fx in self.effects:
@@ -189,12 +221,23 @@ class World:
         ship = self.ship
         self.hole_proximity = 0.0
         for h in self.holes:
-            h.update(dt, self.scroll)
+            h.update(dt, self.speed)
             if h.y < self.bottom_y - 6:
                 h.remove()
                 continue
+            if h.collapsed:
+                h.remove()
+                self.emit(("hole_collapse",))
+                continue
             d = h.distance(ship.x, ship.y)
             self.hole_proximity = max(self.hole_proximity, min(1.0, max(0.0, 1 - (d - h.horizon) / 10)))
+            if not h.deadly:
+                if d < h.drain_radius:
+                    factor = self.shield_factor if ship.shield_on else 1.0
+                    ship.hull = max(0.0, ship.hull - h.drain * factor * dt)
+                    if ship.hull <= 0 and self.death_cause is None:
+                        self.death_cause = "drained"
+                continue
             if d < h.horizon + ship.radius * 0.5 and self.death_cause is None:
                 self.death_cause = "absorbed"
                 ship.hull = 0.0
@@ -235,6 +278,13 @@ class World:
         hits = [t for t in self.targets if t.y > y0 - t.radius and abs(t.x - ship.x) < t.radius + self.beam_half_width]
         target = min(hits, key=lambda t: t.y - t.radius) if hits else None
         y1 = max(y0, target.y - radius_on_axis(target, ship.x)) if target else self.top_y + 4
+        m = self.mother
+        front = m.front_y(ship.x) if m is not None else None
+        if front is not None and front < y1:
+            self.beam.show(ship.x, y0, max(y0, front), True, dt)
+            if m.hurt("beam", ship.x, dt):
+                self._mother_down()
+            return
         self.beam.show(ship.x, y0, y1, target is not None, dt)
         if target is not None:
             target.beam_heat = 1.0
@@ -247,6 +297,7 @@ class World:
             if self._puff_t > 0.025:
                 self.effects.append(Puff(self.root, (n.x, n.y - 0.6, 0.1), self.rng))
             hit = any((t.x - n.x) ** 2 + (t.y - n.y) ** 2 < (t.radius + n.radius) ** 2 for t in self.targets)
+            hit = hit or (self.mother is not None and self.mother.contains(n.x, n.y + n.radius))
             if hit or n.expired or n.y > self.top_y - 1:
                 self._detonate(n)
         if self._puff_t > 0.025:
@@ -259,12 +310,32 @@ class World:
         for t in self.targets:
             if math.hypot(t.x - n.x, t.y - n.y) < self.nuke_radius + t.radius and t.hurt("nuke"):
                 self._kill(t, "nuke")
+        m = self.mother
+        if m is not None and (m.contains(n.x, n.y + self.nuke_radius) or m.contains(n.x, n.y)):
+            if m.hurt("nuke", n.x):
+                self._mother_down()
         for s in self.shots:
             if math.hypot(s.x - n.x, s.y - n.y) < self.nuke_radius:
                 s.remove()
 
+    def _mother_down(self):
+        m = self.mother
+        if m is None or not m.alive:
+            return
+        self.emit(("mother_down", m.x, m.y))
+        self.explode(m.x, m.y - 1.5, 3.5)
+        m.alive = False
+
     def _collide(self):
         ship = self.ship
+        m = self.mother
+        if m is not None and m.alive:
+            for b in self.bolts:
+                if b.alive and m.contains(b.x, b.y):
+                    b.remove()
+                    self.emit(("mother_hit", m.zone(b.x)))
+                    if m.hurt("laser", b.x):
+                        self._mother_down()
         for t in self.targets:
             for b in self.bolts:
                 if b.alive and (t.x - b.x) ** 2 + (t.y - b.y) ** 2 < (t.radius + b.radius) ** 2:

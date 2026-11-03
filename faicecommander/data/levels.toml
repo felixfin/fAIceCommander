@@ -95,3 +95,43 @@ hole_first_s = 6
 hole_radius_px = 18           # event horizon: touching it means game over
 hole_pull = 60.0              # drift speed towards the hole = pull / distance^2 (units)
 hole_speed_px = [40, 90]      # own approach speed on top of the scroll
+
+[level_07]
+name = "The Mother"
+music = "mother"
+thrust = false                # the ship stops: boss fight
+mother_width_px = 280
+mother_distance_px = 330      # above the ship
+mother_speed_px = 70          # moves horizontally only
+regen_per_s = 1.0             # her energy regenerates (percent per second)
+# damage per weapon for zone 1 / 2 / 3 (outer 30 % / inner 15 % / centre 10 % of the width)
+laser = [5, 10, 20]           # percent per hit
+beam = [10, 20, 30]           # percent per second
+nuke = [20, 40, 60]           # percent per nuke
+shot_interval_s = 4
+shot_damage_percent = 5
+shot_speed_px = 380
+bomb_first_s = 45
+bomb_interval_s = 120         # artificial black hole bomb, about every two minutes
+bomb_speed_px = 260
+hole_life_s = 10
+hole_radius_px = 14
+hole_pull = 35.0
+hole_drain_radius_px = 100
+hole_drain_per_s = 5          # hull percent per second while close
+pulse_first_s = 20
+pulse_interval_s = [25, 35]
+pulse_duration_s = [5, 10]
+ring_speed_px = 200           # the hypno pulse travels from the mothership to you
+eyes_grace_s = 0.4
+vulnerable_s = 10             # after a pulse she takes 50 % more damage
+vulnerable_bonus = 0.5
+score_per_second = 0
+score_victory = 10000
+
+[endless]
+name = "Endless"
+music = "debris"
+start_difficulty = 1.0
+difficulty_per_min = 0.35
+score_per_second = 20

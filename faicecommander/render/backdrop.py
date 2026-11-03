@@ -95,11 +95,12 @@ class Backdrop:
             self.neb_offset += speed * dt * 0.0012
             self.nebula.setTexOffset(TextureStage.getDefault(), 0, self.neb_offset)
 
-    def set_visible(self, visible):
-        """The Void level shows nothing at all."""
-        for node in (self.root, self.nebula):
-            if node is not None:
-                node.show() if visible else node.hide()
+    def set_visible(self, visible, stars=True):
+        """The Void level shows nothing at all; cutscenes show only the nebula (the star planes
+        look like a flat band when the camera leaves its top-down view)."""
+        if self.nebula is not None:
+            self.nebula.show() if visible else self.nebula.hide()
+        self.root.show() if visible and stars else self.root.hide()
 
     def destroy(self):
         self.root.removeNode()

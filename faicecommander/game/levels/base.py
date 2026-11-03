@@ -11,6 +11,8 @@ class Level:
     nukes = 0
     banner = "Reach the next star"
     hypno = None   # HypnoCycle in levels with hypno pulses
+    progress_label = "NEXT STAR"
+    note = ""      # extra status line under the progress bar
 
     def __init__(self, world, data):
         self.world = world

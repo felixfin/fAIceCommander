@@ -68,8 +68,8 @@ class Hud:
         self.font.setPixelsPerUnit(80)
         tl, tr = base.a2dTopLeft, base.a2dTopRight
         t = dict(font=self.font, mayChange=True)
-        OnscreenText("HULL", parent=tl, pos=(0.05, -0.085), scale=0.042, fg=GREEN, align=TextNode.ALeft, **t)
-        OnscreenText("ENERGY", parent=tl, pos=(0.05, -0.155), scale=0.042, fg=CYAN, align=TextNode.ALeft, **t)
+        self.labels = [OnscreenText("HULL", parent=tl, pos=(0.05, -0.085), scale=0.042, fg=GREEN, align=TextNode.ALeft, **t),
+                       OnscreenText("ENERGY", parent=tl, pos=(0.05, -0.155), scale=0.042, fg=CYAN, align=TextNode.ALeft, **t)]
         self.hull = Bar(tl, 0.25, -0.1, 0.62, 0.05, GREEN)
         self.energy = Bar(tl, 0.25, -0.17, 0.62, 0.05, CYAN)
         self.score = OnscreenText("0000000", parent=tr, pos=(-0.05, -0.12), scale=0.085, fg=GOLD, align=TextNode.ARight, **t)
@@ -87,14 +87,19 @@ class Hud:
             fill = rect(node, 0, 0.27, -0.065, 0.0, (c[0], c[1], c[2], 0.22))
             label = OnscreenText(name.upper(), parent=node, pos=(0.135, -0.045), scale=0.04, fg=c, **t)
             self.slots[name] = (node, box_, fill, label)
-        OnscreenText("NEXT STAR", parent=top, pos=(-0.57, -0.12), scale=0.032, fg=GREY, align=TextNode.ALeft, **t)
+        self.progress_label = OnscreenText("NEXT STAR", parent=top, pos=(-0.57, -0.12), scale=0.032, fg=GREY,
+                                           align=TextNode.ALeft, **t)
         self.progress = Bar(top, -0.36, -0.13, 0.93, 0.025, (0.9, 0.85, 1, 1), segments=40)
+        self.note = OnscreenText("", parent=top, pos=(0.105, -0.19), scale=0.04, fg=GOLD, **t)
         # centre messages (game area)
         self.center = base.aspect2d.attachNewNode("centre")
         self.title = OnscreenText("", parent=self.center, pos=(0, 0.08), scale=0.12, fg=PINK, **t)
         self.subtitle = OnscreenText("", parent=self.center, pos=(0, -0.02), scale=0.05, fg=(0.9, 0.92, 1, 1), **t)
         self.hint = OnscreenText("", parent=self.center, pos=(0, -0.1), scale=0.04, fg=GREY, **t)
         self.warning = OnscreenText("", parent=self.center, pos=(0, -0.3), scale=0.055, fg=RED, **t)
+        self.menu = OnscreenText("", parent=self.center, pos=(0, -0.08), scale=0.055, fg=(0.9, 0.92, 1, 1), **t)
+        self.columns = [OnscreenText("", parent=self.center, pos=(x, 0.0), scale=0.036, fg=(0.85, 0.9, 1, 1), **t)
+                        for x in (-0.85, 0.0, 0.85)]
         # control panel
         self.panel = base.aspect2d.attachNewNode("panel")
         self.panel_left = base.a2dBottomLeft.attachNewNode("panel-left")
@@ -112,7 +117,7 @@ class Hud:
                                    fg=(0.85, 0.9, 1, 1), align=TextNode.ARight, **t)
         self.track = OnscreenText("", parent=self.panel_right, pos=(-0.06, -0.2), scale=0.036,
                                   fg=(0.55, 0.85, 1, 1), align=TextNode.ARight, **t)
-        self.keys = OnscreenText("F2 panel  ·  F11 fullscreen  ·  M mute  ·  P pause  ·  Esc quit", parent=self.panel_right,
+        self.keys = OnscreenText("F2 panel  ·  F11 fullscreen  ·  M mute  ·  P pause  ·  Esc menu", parent=self.panel_right,
                                  pos=(-0.06, -0.3), scale=0.03, fg=GREY, align=TextNode.ARight, **t)
         self.cam_note = OnscreenText("", parent=self.panel, pos=(0, 0), scale=0.04, fg=GREY, **t)
         self.set_weapons(["laser", "shield"], "laser", nukes=0)
@@ -139,6 +144,22 @@ class Hud:
             node.setAlphaScale(1.0 if avail else 0.3)
             fill.show() if sel else fill.hide()
             label.setText(f"NUKE ×{nukes}" if name == "nuke" and avail else name.upper())
+
+    def set_level_info(self, label, note):
+        self.progress_label.setText(label)
+        self.note.setText(note)
+
+    def set_menu(self, items, selected):
+        """items: list of (label, enabled). Turn your head / Q/E / arrows to move, mouth / SPACE to choose."""
+        lines = []
+        for i, (label, enabled) in enumerate(items):
+            text = label if enabled else f"{label} (locked)"
+            lines.append(f">  {text}  <" if i == selected else text)
+        self.menu.setText("\n".join(lines))
+
+    def set_columns(self, texts):
+        for col, text in zip(self.columns, list(texts) + [""] * 3):
+            col.setText(text)
 
     def set_stats(self, hull, energy, score, level_name, progress):
         self.hull.set(hull / 100, GREEN if hull > 35 else RED)
@@ -174,5 +195,5 @@ class Hud:
         self.track.setText(text)
 
     def show_game_hud(self, visible):
-        for node in (self.top, self.hull.node, self.energy.node, self.score, self.level):
+        for node in (self.top, self.hull.node, self.energy.node, self.score, self.level, *self.labels):
             node.show() if visible else node.hide()

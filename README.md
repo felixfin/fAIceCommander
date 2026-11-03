@@ -3,11 +3,10 @@
 A 3D space shooter you steer with your face: tilt your head to slide left and right, turn it to
 switch weapons, open your mouth to fire, close your eyes to survive hypno pulses.
 
-Status: **milestone 3** - face controls with calibration and six levels: Asteroid Belt, Debris Field,
-Hypno Nebula (close your eyes during hypno pulses, fly by sonar), The Void (Boltzmann brains that burst
-messily), Patrol (two Catlien raiders that hunt you) and Event Horizon (black holes that pull you in).
-All four weapons, shockwave-timed explosions, procedural sound effects and an adaptive soundtrack with a
-track per level. Level 7 (the mothership), intro, outro, highscores and Easy/Hard selection follow next.
+Status: **milestone 4** - the complete game. An in-engine intro that ends with you becoming FaceCommander
+(live webcam + helmet), a main menu controlled with your face, seven levels up to the boss fight against the
+Mother (damage zones, aimed shots, black hole bombs, travelling hypno pulses, regeneration), an outro, an
+endless mode unlocked by winning, Easy / Hard / practice modes and local top-10 highscores per mode.
 
 On first launch the soundtrack is synthesized once (a few seconds) into
 `%LOCALAPPDATA%\fAIceCommander3D\audio`; the panel shows the progress.
@@ -27,7 +26,7 @@ py -3.12 -m venv .venv
 .venv\Scripts\python -m faicecommander              # fullscreen, webcam
 .venv\Scripts\python -m faicecommander --windowed   # in a window
 .venv\Scripts\python -m faicecommander --no-camera  # keyboard only
-.venv\Scripts\python -m faicecommander --level 3    # practice a level directly (1-6)
+.venv\Scripts\python -m faicecommander --level 7    # jump straight into a level (1-7)
 ```
 
 ## Controls
@@ -39,7 +38,9 @@ py -3.12 -m venv .venv
 | open mouth | Space | laser: one pulse per opening · beam: fires while open · nuke: one per opening · shield: toggle |
 | close eyes | C | hypno protection (from level 3) |
 
-F2 hides the webcam panel, F11 toggles fullscreen, M mutes, P pauses, Esc quits. During calibration,
+F2 hides the webcam panel, F11 toggles fullscreen, M mutes, P pauses, Esc goes back (menu / skip).
+In menus, turn your head (Q/E, arrows) to move and open your mouth (Space, Enter) to choose.
+Space, Esc or holding your mouth open skips the intro. Highscore names are typed on the keyboard. During calibration,
 Enter skips to the game with default thresholds. The game pauses by itself when it loses your face.
 
 Tuning lives in `faicecommander/data/config.toml` (controls, physics) and `levels.toml` (level numbers).
@@ -58,9 +59,24 @@ faicecommander/
   core/        app shell (window, display regions, state machine), game states
   input/       face tracker thread (MediaPipe), gesture mapping, keyboard fallback
   audio/       synthesizer, sound effects, soundtrack stems, cache, music director
+  cutscenes/   intro and outro, built from the game's own models
   game/        world (2D logic on the play plane), entities, weapons, levels (one file per level)
   render/      procedural models, backdrop, effects, HUD, webcam view with AR helmet
   data/        config.toml, levels.toml
   assets/      face model, font
 concept/       concept renders and the music teaser (see concept/web/index.html)
 ```
+
+## Modes
+
+- **Easy** - after a game over you retry the level you failed, with the score you started it with.
+- **Hard** - one run from level 1; a game over ends it.
+- **Endless** - unlocked by defeating the Mother: mixed waves at rising difficulty.
+- **Practice** - play any single level; no highscore.
+
+Highscores and the endless unlock are stored in `%LOCALAPPDATA%\fAIceCommander3D\save.json`.
+
+## Voice-over (optional)
+
+Intro and outro show their lines as captions. To add a voice, put `<id>.wav` files into
+`faicecommander/assets/voice/` - the ids and texts are listed in `LINES.txt` there.
