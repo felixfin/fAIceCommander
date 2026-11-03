@@ -49,6 +49,24 @@ Enter skips to the game with default thresholds. The game pauses by itself when 
 Tuning lives in `faicecommander/data/config.toml` (controls, physics) and `levels.toml` (level numbers:
 the `[level_XX]` tables are Easy, `[medium.level_XX]` / `[hard.level_XX]` override single values).
 
+## Trailer takes
+
+`--record NAME` starts a guided recording session: after calibration the game plays six short
+segments one after another (Debris Field, Hypno Nebula, The Void, Patrol, Event Horizon, The Mother
+starting at 40 % health). A game over restarts the segment automatically; `N` skips to the next one,
+`R` restarts it, `Esc` saves and quits. Each segment is stored in `recordings/NAME/` (controls, time
+steps, face landmarks, webcam video and person mask, seeds), so it can be replayed exactly and
+re-rendered in high quality for the trailer.
+
+Building the trailer from a take (tools/trailer, needs FFmpeg; the cut list is `tools/trailer/edl.py`):
+
+```
+.venv\Scripts\python tools\trailer\render_all.py   # replays + cutscenes rendered at 1080p (frames)
+.venv\Scripts\python tools\trailer\cards.py        # title cards
+.venv\Scripts\python tools\trailer\music.py        # the trailer score
+.venv\Scripts\python tools\trailer\compose.py      # cut, mix, encode: build\trailer\fAIceCommander3D_trailer.mp4
+```
+
 ## Tests
 
 ```

@@ -2,7 +2,10 @@
 import math
 
 import numpy as np
-from panda3d.core import Point3, TextNode, TransparencyAttrib
+from panda3d.core import (
+    Geom, GeomNode, GeomTriangles, GeomVertexData, GeomVertexFormat, GeomVertexWriter, Point3, SamplerState, TextNode,
+    Texture, TransparencyAttrib,
+)
 
 from ..render import models as M
 from ..render.effects import Explosion
@@ -81,23 +84,89 @@ def burning_planet(root, radius=7.0):
     return cached_copy(root, f"planet-{radius:g}", lambda r: _burning_planet(r, radius))
 
 
+def _value_noise(P, octaves, seed, base=2.0, gain=0.55):
+    """Fractal 3D value noise at points P (n, 3) - smooth, seamless on a sphere."""
+    rng = np.random.default_rng(seed)
+    total, amp, norm = np.zeros(len(P)), 1.0, 0.0
+    for o in range(octaves):
+        f = base * 2 ** o
+        lattice = rng.random((32, 32, 32))
+        q = P * f + rng.uniform(0, 32, 3)
+        i0 = np.floor(q).astype(int)
+        u = q - i0
+        u = u * u * (3 - 2 * u)
+        acc = np.zeros(len(P))
+        for dx in (0, 1):
+            for dy in (0, 1):
+                for dz in (0, 1):
+                    w = (u[:, 0] if dx else 1 - u[:, 0]) * (u[:, 1] if dy else 1 - u[:, 1]) * (u[:, 2] if dz else 1 - u[:, 2])
+                    acc += w * lattice[(i0[:, 0] + dx) % 32, (i0[:, 1] + dy) % 32, (i0[:, 2] + dz) % 32]
+        total += acc * amp
+        norm += amp
+        amp *= gain
+    return total / norm
+
+
+def _planet_textures(w=2048, h=1024, seed=4):
+    """Equirectangular crust (albedo) and lava (emission) maps from noise sampled on the sphere."""
+    lon = (np.arange(w) + 0.5) / w * 2 * np.pi
+    lat = (np.arange(h) + 0.5) / h * np.pi - np.pi / 2
+    LON, LAT = np.meshgrid(lon, lat)
+    P = np.stack([np.cos(LAT) * np.cos(LON), np.cos(LAT) * np.sin(LON), np.sin(LAT)], -1).reshape(-1, 3)
+    rock = _value_noise(P, 6, seed)
+    warp = _value_noise(P * 1.0, 3, seed + 1)
+    ridge = 1 - np.abs(_value_noise(P + warp[:, None] * 0.35, 5, seed + 2, base=3.0) * 2 - 1)  # 1 on the crack lines
+    cracks = np.clip((ridge - 0.86) / 0.14, 0, 1) ** 1.6
+    fields = np.clip((_value_noise(P, 3, seed + 3, base=1.5) - 0.6) / 0.2, 0, 1)            # burning regions
+    heat = np.clip(cracks + fields * (0.4 + 0.6 * rock), 0, 1)
+    crust = np.stack([0.11 + 0.12 * rock, 0.085 + 0.09 * rock, 0.075 + 0.07 * rock], -1) * (1 - 0.6 * heat[:, None])
+    lava = np.stack([heat * 1.0, heat ** 1.5 * 0.45, heat ** 3 * 0.12], -1)
+
+    def tex(name, rgb):
+        img = np.clip(rgb.reshape(h, w, 3), 0, 1)
+        t = Texture(name)
+        t.setup2dTexture(w, h, Texture.T_unsigned_byte, Texture.F_rgb)
+        t.setRamImage(np.ascontiguousarray((img[::-1, :, ::-1] * 255).astype(np.uint8)).tobytes())
+        t.setMinfilter(SamplerState.FT_linear_mipmap_linear)
+        t.setAnisotropicDegree(8)
+        return t
+    return tex("crust", crust), tex("lava", lava)
+
+
+def _uv_sphere(parent, radius, tex, unlit=False, additive=False, nlat=96, nlon=192):
+    vd = GeomVertexData("sphere", GeomVertexFormat.getV3n3t2(), Geom.UHStatic)
+    vw, nw, tw = GeomVertexWriter(vd, "vertex"), GeomVertexWriter(vd, "normal"), GeomVertexWriter(vd, "texcoord")
+    for i in range(nlat + 1):
+        la = -math.pi / 2 + math.pi * i / nlat
+        for j in range(nlon + 1):
+            lo = 2 * math.pi * j / nlon
+            n = (math.cos(la) * math.cos(lo), math.cos(la) * math.sin(lo), math.sin(la))
+            vw.addData3(n[0] * radius, n[1] * radius, n[2] * radius)
+            nw.addData3(*n)
+            tw.addData2(j / nlon, i / nlat)
+    prim = GeomTriangles(Geom.UHStatic)
+    row = nlon + 1
+    for i in range(nlat):
+        for j in range(nlon):
+            a, b = i * row + j, i * row + j + 1
+            prim.addVertices(a, b, a + row)
+            prim.addVertices(b, b + row, a + row)
+    g = Geom(vd)
+    g.addPrimitive(prim)
+    node = GeomNode("sphere")
+    node.addGeom(g)
+    np_ = parent.attachNewNode(node)
+    np_.setTexture(tex)
+    M.style(np_, unlit=unlit, additive=additive)
+    return np_
+
+
 def _burning_planet(root, radius):
     planet = root.attachNewNode("planet")
-    V, F = M.icosphere(4)
+    crust, lava = _planet_textures()
+    _uv_sphere(planet, radius, crust)                               # lit rock: day and night side
+    _uv_sphere(planet, radius * 1.002, lava, additive=True)         # the cracks glow everywhere
     rng = np.random.default_rng(4)
-    big = [rng.normal(size=3) for _ in range(14)]
-    small = [rng.normal(size=3) * 3.2 for _ in range(10)]
-
-    def lava(p):
-        n1 = sum(math.sin(4.5 * float(np.dot(p, d / np.linalg.norm(d))) + i) for i, d in enumerate(big)) / 5
-        n2 = sum(math.sin(float(np.dot(p, d)) + i * 0.7) for i, d in enumerate(small)) / 5
-        vein = max(0.0, 1 - abs(n1 + 0.35 * n2) * 7.0)          # thin cracks along the zero lines
-        fire = max(0.0, n1 - 0.75) * 2.5                          # a few burning regions
-        hot = min(1.0, vein ** 1.5 * 1.3 + fire)
-        crust = 0.03 + 0.03 * (0.5 + 0.5 * n2)
-        return (crust + 1.05 * hot, crust * 0.8 + 0.42 * hot ** 1.6, crust * 0.7 + 0.08 * hot ** 3, 1)
-
-    M.part(planet, V * radius, F, (1, 1, 1), vcol=lava, unlit=True)
     halo = planet.attachNewNode("halo")
     Va, Fa = M.annulus(radius * 0.98, radius * 1.18, 128, 4)
     Va = Va[:, [0, 2, 1]]  # into the x-z plane: the billboard turns that towards the camera

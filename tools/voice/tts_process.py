@@ -152,7 +152,10 @@ def honor(x):
 
 CHAIN = {"intro_08": surgeon, "intro_10": comms, "intro_11": epic, "outro_04": honor}
 
+TRAILER = ROOT / "build" / "trailer" / "voice"
 for path in sorted(RAW.glob("*.wav")):
     out = CHAIN.get(path.stem, narrator)(load(path))
-    save(OUT / path.name, out)
+    dest = TRAILER if path.stem.startswith("trailer_") else OUT
+    dest.mkdir(parents=True, exist_ok=True)
+    save(dest / path.name, out)
     print(f"{path.stem}: {len(out) / SR:.2f}s  {CHAIN.get(path.stem, narrator).__name__}")

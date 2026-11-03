@@ -4,3 +4,5 @@ __pycache__/
 tools/voice/.pipervenv/
 tools/voice/models/
 tools/voice/raw/
+recordings/
+build/

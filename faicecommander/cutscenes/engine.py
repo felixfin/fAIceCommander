@@ -121,6 +121,8 @@ class Cutscene:
                 voice = self._voice(line.id)
                 if voice is not None:
                     voice.play()
+        if getattr(self.app, "no_captions", False):  # trailer renders bring their own title cards
+            caption = card = credits = ""
         self.caption.setText(caption)
         self.card.setText(card)
         self.credits.setText(credits)

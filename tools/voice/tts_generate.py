@@ -47,6 +47,13 @@ LINES = {
     "outro_02": ("norman", "Across the galaxy, the swarm loses its mind.", 1.15),
     "outro_03": ("norman", "On a thousand worlds, the collars fall.", 1.15),
     "outro_04": ("john", f"My name is Honor. // James {NATHANIEL} Honor.", 1.12),
+    # trailer narration (written to build/trailer/voice by tts_process.py, not into the game)
+    "trailer_01": ("norman", "For centuries... they came from the dark.", 1.15),
+    "trailer_02": ("norman", "They took our worlds.", 1.15),
+    "trailer_03": ("norman", "They took our names.", 1.15),
+    "trailer_04": ("norman", "One commander survived.", 1.15),
+    "trailer_05": ("norman", "You are our last hope.", 1.2),
+    "trailer_06": ("norman", "Your face. / Is the weapon.", 1.15),
 }
 FILES = {"norman": "en_US-norman-medium", "kristin": "en_US-kristin-medium",
          "ljspeech": "en_US-ljspeech-high", "john": "en_US-john-medium"}

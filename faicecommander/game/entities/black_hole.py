@@ -27,7 +27,7 @@ REF_HORIZON = 0.9  # world units (18 px): the hole size the configured pull refe
 
 class BlackHole:
     def __init__(self, parent, template, x, y, vy, horizon, pull, life=None, drain=0.0, drain_radius=0.0,
-                 breathe=0.0):
+                 breathe=0.0, rng=None):
         self.node = template.store.copyTo(parent)
         self.x, self.y, self.vy = x, y, vy
         self.base_horizon = self.horizon = horizon
@@ -35,7 +35,7 @@ class BlackHole:
         self.life, self.drain, self.drain_radius = life, drain, drain_radius
         self.deadly = life is None
         self.breathe = breathe                   # the horizon swells and shrinks by this share
-        self.breathe_w = 2 * math.pi / np.random.uniform(2.5, 4.5)
+        self.breathe_w = 2 * math.pi / (rng.uniform(2.5, 4.5) if rng is not None else 3.5)
         self.node.setScale(horizon * 1.25)  # the visible black sphere is a little larger than the kill radius
         self.alive = True
         self.t = 0.0

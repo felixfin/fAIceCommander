@@ -139,7 +139,12 @@ class LoadingState(State):
         if self.done and self.t > 0.3:
             app = self.app
             cutscene = getattr(app.args, "cutscene", None)
-            if cutscene == "outro":
+            if app.take is not None:
+                if app.tracker_ok and not app.calibrated:
+                    app.change(CalibrationState)  # calibrate first; the take starts from the menu state
+                else:
+                    app.take.start()
+            elif cutscene == "outro":
                 app.change(OutroState(app, preview=True))
             elif cutscene == "intro" or app.cfg.get("display.play_intro", True):
                 app.change(IntroState)
@@ -176,7 +181,10 @@ class CalibrationState(State):
     def update(self, dt, face, ctl):
         if self.app.skip_requested():
             self.app.calibrated = True
-            self.app.change(MenuState)
+            if self.app.take is not None and not self.app.take.started:
+                self.app.take.start()
+            else:
+                self.app.change(MenuState)
             return
         key, title, sub, duration = self.STEPS[self.step]
         if face is not None and face.found:
@@ -194,7 +202,10 @@ class CalibrationState(State):
                 self.app.audio.sfx.play("beep_high")
                 self.app.gestures.calibrate(self.cal.result())
                 self.app.calibrated = True
-                self.app.change(MenuState)
+                if self.app.take is not None and not self.app.take.started:
+                    self.app.take.start()
+                else:
+                    self.app.change(MenuState)
             else:
                 self.app.audio.sfx.play("beep")
 

@@ -41,8 +41,9 @@ class App(ShowBase):
         self.calibrated = False
         self.text_input = False
         self._setup_scene()
-        self.tracker = FaceTracker(cfg)
-        self.tracker_ok = (not args.no_camera) and self.tracker.start()
+        injected = getattr(args, "tracker", None)  # trailer replay: recorded faces instead of the camera
+        self.tracker = injected or FaceTracker(cfg)
+        self.tracker_ok = injected is not None or ((not args.no_camera) and self.tracker.start())
         self.gestures = GestureMapper(cfg)
         self.keyboard = KeyboardControls(self)
         self._last_keyboard = -99.0
@@ -80,6 +81,11 @@ class App(ShowBase):
             self.toggle_fullscreen(force=True)
         self.layout()
         self.state = None
+        self.levels_override = {}  # per-run tweaks of the level table (trailer takes)
+        self.take = None
+        if getattr(args, "record", None):
+            from .recorder import RecordSession
+            self.take = RecordSession(self, args.record)
         if args.autopilot or args.level > 1:  # straight into the action (practice, tests)
             self.calibrated = True
             self.start_run("easy", args.level - 1)
@@ -193,6 +199,9 @@ class App(ShowBase):
         self.state.enter()
 
     def on_escape(self):
+        if self.take is not None:  # a trailer take: Esc saves the current clip and quits
+            self.userExit()
+            return
         self.state.on_escape()
 
     def webcam_fullscreen(self, on):
@@ -204,7 +213,10 @@ class App(ShowBase):
         if self.mode == "endless":
             return Endless(self.world, self.levels_cfg["endless"], self.levels_cfg)
         cls = LEVELS[self.level_index]
-        return cls(self.world, level_data(self.levels_cfg, cls.key, self.difficulty))
+        data = level_data(self.levels_cfg, cls.key, self.difficulty)
+        for k, v in self.levels_override.items():
+            data.set(k, v)
+        return cls(self.world, data)
 
     def start_run(self, mode, level_index=0, difficulty=None):
         """mode: easy / medium / hard (a full run), endless, or practice (one level at `difficulty`)."""
@@ -263,6 +275,8 @@ class App(ShowBase):
         if self.autopilot:
             ctl = self.autopilot.update(dt, self.world, getattr(getattr(self.state, "level", None), "hypno", None))
         self.state.update(dt, face, ctl)
+        if self.take is not None:
+            self.take.frame(dt, face, ctl)
         self.webcam.update(face, ctl, dt, self.shake_amount, self.hypno_alpha)
         self.hud.set_gauges(ctl)
         if self.tracker_ok:
@@ -289,6 +303,8 @@ class App(ShowBase):
         return task.cont
 
     def userExit(self):
+        if self.take is not None:
+            self.take.stop()
         self.tracker.stop()
         super().userExit()
 

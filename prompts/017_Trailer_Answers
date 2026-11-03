@@ -1,0 +1,51 @@
+Ja, dein Vorschlag funktioniert. Ich würde ihn aber so umsetzen, dass ich nicht während des Spielens Bilder abgreife, sondern deine Eingaben aufzeichne.
+
+Ingame-Szenen: aufzeichnen, dann in hoher Qualität neu rendern
+Aufnahme: Du startest mit --record trailer_take1 und spielst ein paar Minuten, am besten Level 2, 5, 6 und den Boss. Das Spiel speichert pro Frame nur deine Steuersignale (Lenken, Mund, Augen, Waffenwechsel), die Zeitschritte und den Zufalls-Startwert. Das bremst nichts und kostet kaum Speicher.
+Replay-Render: Danach spiele ich die Aufnahme exakt nach, ohne Fenster und mit festen 60 fps. Jedes Bild entsteht in einer Qualität, die live nicht machbar wäre:
+Kantenglättung durch Supersampling
+echte Bewegungsunschärfe
+stärkerer Bloom, Linsenreflexe, chromatische Aberration
+Kino-Farbkorrektur
+Kameraarbeit: Weil das Replay deterministisch ist, kann ich dieselbe Szene mehrfach rendern: aus der Spielansicht, aus einer tiefen Verfolgerkamera hinter dem Schiff, nah an Explosionen oder in Zeitlupe.
+Vorher muss ich dafür sorgen, dass das Spiel bei gleichem Startwert und gleichen Eingaben exakt gleich abläuft. Das ist überschaubar. Live-Mitschnitte würden dagegen an der Bildrate hängen und die Webcam-Leiste mitnehmen.
+
+Ablauf: etwa 90 s, Rhythmus „dunkel – Schlag – Stille – Explosion“
+Zeit	Bild	Ton
+0–8 s	Schwarz. EKG-Piepen, Störflackern. Texttafel: „THEY CAME FROM THE DARK“	tiefer Drone, Herzschlag
+8–20 s	Schnelle Cuts mit Blitzen dazwischen: brennender Planet, Catlien-Schwarm im Vorbeiflug, Bombardement	Taikos setzen ein, BRAAAM
+20–30 s	Sklavenhalle mit Blitzlicht, Halsbänder, Marken („MALE 4471“). Tafel: „THEY TOOK OUR WORLDS“ / „THEY TOOK OUR NAMES“	dissonante Streicher, Erzähler
+30–36 s	Nebel, dann das Mutterschiff, Hypno-Ringe. Hartes Schwarz, 0,5 s Stille, dann die Augen der Königin flammen auf. Brüllen.	Stille, dann Brüllen und Impact
+36–44 s	Schlacht in Zeitlupe, die Flotte stirbt. Tafel: „ONE COMMANDER SURVIVED“	Streicher-Ostinato
+44–50 s	OP-Saal, Gehirn im Tank, Helm rastet im Schiff ein, Systeme fahren hoch	Klavier, dann Riser
+50–52 s	Schwarz. Erzähler: „You are our last hope.“	Stille
+52–75 s	Drop: Ingame-Cuts im Takt, 0,5–1,5 s lang: Laser, Strahl, Raketen-Schockwelle, Gehirn-Splatter am Glas, Bauchrollen-Sog, schwarzes Loch, das die Musik verzerrt, Hypno-Puls. Dazwischen Tafeln: „STEER WITH YOUR HEAD“, „FIRE WITH YOUR MOUTH“, „CLOSE YOUR EYES – OR DIE“	DnB/Dubstep-Drop, Katzenschreie als Effekte
+75–83 s	Bosskampf: Phase 3, rote Wut, Fächerschüsse, Atomrakete trifft die Mitte, Kettenexplosion, Weißblitz	Musik bricht ab
+83–90 s	Titel fAIceCommander 3D mit Glitch, darunter „Your face is the weapon.“	letzter Schlag mit Hall
+Die Musik komponiere ich passend zu diesem Schnittplan, sodass jeder Schlag auf einem Cut liegt. Neue Erzählerzeilen erzeuge ich mit derselben tiefen Stimme wie im Intro. Filmische Szenen rendere ich mit eigenen Kamerafahrten statt der Intro-Einstellungen.
+
+Technik
+Neuer Ordner tools/trailer/:
+eine Schnittliste mit Shots, Zeiten und Übergängen
+ein Renderer, der Bild für Bild als PNG ausgibt
+die Trailer-Musik
+der Zusammenschnitt zu einer MP4-Datei (H.264 und AAC)
+Für den Zusammenschnitt brauche ich FFmpeg als reines Entwicklungswerkzeug, wie Piper: Es kommt nicht ins Spiel. Ich würde imageio-ffmpeg in einer eigenen Umgebung nehmen.
+Rechenzeit: 1080p mit 60 fps und Bewegungsunschärfe wird eher eine Stunde dauern. Das läuft im Hintergrund.
+Bevor ich anfange, brauche ich deine Entscheidung zu:
+Länge: 90 s wie oben, oder kürzer (60 s) bzw. länger (2 min)?
+Auflösung: 1080p mit 60 fps, oder 4K? 4K braucht ungefähr die vierfache Renderzeit.
+Dein Gesicht im Trailer: Soll das Webcam-Bild mit Helm und Cockpit-Hintergrund vorkommen, zum Beispiel beim Satz „You are our last hope“? Dafür würde die Aufnahme dein Kamerabild mitspeichern. Sonst nehme ich den Helm allein.
+FFmpeg: Ist es für dich in Ordnung, wenn ich es als Werkzeug außerhalb des Spiels nutze?
+Wenn du zustimmst, baue ich zuerst die Aufnahmefunktion. Dann kannst du spielen, während ich Musik und filmische Shots vorbereite.
+
+
+Zu deinen Fragen:
+1. 90s
+2. 1080p reicht erstmal. Wenn alles passt können wir vielleicht ein zweites Mal rendern mit 4K.
+3. Ja, mein Gesicht mit Helm, Sonnenbrille, Zigarre, Cockpit-Hintergrund soll auf jeden Fall im Spiel vorkommen.
+4. Ja. FFmpeg sollte bereits installiert sein. Du darfst darauf zugreifen.
+
+Nur um es nochmal ganz klar zustellen: Ich will auf jeden Fall, dass das Gameplay MIT Webcambild sichtbar ist. Das Spielfeld selbst darf gerne in höherer Qualität gerendert sein als im realen Spiel.
+
+Erkläre mir nochmal ganz genau, wie ich die entsprechenden Szenen aufnehmen soll. Ich starte das Spiel mit Argument --record trailer_take1. Und dann? Dann spiele ich verschiedene Levels? Muss ich sie selbst auswählen oder tust du das für mich?

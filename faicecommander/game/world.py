@@ -140,7 +140,7 @@ class World:
         self.emit(("flak",))
 
     def spawn_hole(self, x, y, vy, horizon, pull, **kw):
-        h = BlackHole(self.root, self.hole_tpl, x, y, vy, horizon, pull, **kw)
+        h = BlackHole(self.root, self.hole_tpl, x, y, vy, horizon, pull, rng=self.rng, **kw)
         self.holes.append(h)
         return h
 
