@@ -13,6 +13,8 @@ def main():
     parser.add_argument("--screenshot", metavar="PATH", help="with --autopilot: save a screenshot, then quit")
     parser.add_argument("--offscreen", action="store_true", help="render without a visible window (tests)")
     parser.add_argument("--level", type=int, default=1, help="start at this level (practice; development)")
+    parser.add_argument("--cutscene", choices=("intro", "outro"),
+                        help="play the intro or the outro right after loading (watch only, then the menu)")
     args = parser.parse_args()
 
     from .config import ASSETS_DIR, Config

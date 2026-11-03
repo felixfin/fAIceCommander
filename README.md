@@ -29,6 +29,7 @@ py -3.12 -m venv .venv
 .venv\Scripts\python -m faicecommander --windowed   # in a window
 .venv\Scripts\python -m faicecommander --no-camera  # keyboard only
 .venv\Scripts\python -m faicecommander --level 7    # jump straight into a level (1-7)
+.venv\Scripts\python -m faicecommander --cutscene outro   # watch the intro or the outro (intro / outro)
 ```
 
 ## Controls

@@ -75,7 +75,14 @@ class IntroState(_CutsceneState):
 class OutroState(_CutsceneState):
     make = staticmethod(make_outro)
 
+    def __init__(self, app, preview=False):
+        super().__init__(app)
+        self.preview = preview  # started with --cutscene outro: just watching, nothing was won
+
     def finished(self):
+        if self.preview:
+            self.app.change(MenuState)
+            return
         self.app.save.unlock_endless()
         self.app.end_run(victory=True)
 
@@ -119,7 +126,13 @@ class LoadingState(State):
         self.ship.setR(8 * math.sin(self.t * 0.9))
         if self.done and self.t > 0.3:
             app = self.app
-            app.change(IntroState if app.cfg.get("display.play_intro", True) else MenuState)
+            cutscene = getattr(app.args, "cutscene", None)
+            if cutscene == "outro":
+                app.change(OutroState(app, preview=True))
+            elif cutscene == "intro" or app.cfg.get("display.play_intro", True):
+                app.change(IntroState)
+            else:
+                app.change(MenuState)
 
     def on_escape(self):
         self.app.userExit()
