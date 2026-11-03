@@ -186,7 +186,10 @@ docs/media/    trailer (web version), poster and screenshots for this page
 concept/       concept renders and the music teaser (see concept/web/index.html)
 ```
 
-## Credits
+## Credits and license
 
 An idea by Felix. Models, music, sound and code generated with Claude. Built on Panda3D, MediaPipe,
 OpenCV, NumPy and SciPy - see [THIRD_PARTY.md](THIRD_PARTY.md) for all components and their licenses.
+
+fAIceCommander 3D is released under the [MIT License](LICENSE). The bundled third-party parts (the
+MediaPipe models, the Chakra Petch font) keep their own licenses (Apache 2.0, SIL OFL 1.1).
