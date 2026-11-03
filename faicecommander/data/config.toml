@@ -18,7 +18,9 @@ fps = 30
 [controls]
 tilt_deadzone_deg = 4.0     # head roll below this is ignored
 tilt_full_deg = 22.0        # head roll for full sideways speed
-turn_threshold = 0.42       # normalized nose offset that switches the weapon
+turn_threshold = 0.5        # normalized nose offset that switches the weapon
+turn_hold_s = 0.15          # ... held this long (brief jerks while steering do not count)
+turn_tilt_penalty = 0.7     # the threshold rises by up to this share while the head is tilted
 turn_rearm = 0.18           # must come back below this before the next switch
 turn_lockout_s = 0.6
 mouth_open_ratio = 0.55     # 0 = calibrated closed mouth, 1 = calibrated wide open

@@ -473,8 +473,8 @@ class PlayState(State):
             if ev[1] == "mother":
                 sfx.play("mother_meow", 0.8, rate=0.9 + 0.2 * app.world.rng.random())
             else:
-                sfx.play(f"meow_{int(app.world.rng.integers(1, 4))}", 0.75, rate=0.92 + 0.16 * app.world.rng.random())
-            sfx.play("enemy_shot", 0.35)
+                sfx.play(f"meow_{int(app.world.rng.integers(1, 4))}", 1.0, rate=0.95 + 0.1 * app.world.rng.random())
+            sfx.play("enemy_shot", 0.12)
         elif kind == "laser":
             sfx.play("laser", 0.55, rate=0.95 + 0.1 * app.world.rng.random())
         elif kind == "shield":

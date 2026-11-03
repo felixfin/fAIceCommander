@@ -54,7 +54,8 @@ for line_id, (voice, text, scale) in LINES.items():
         continue
     if voice not in loaded:
         loaded[voice] = PiperVoice.load(str(VOICES / f"{FILES[voice]}.onnx"))
-    cfg = SynthesisConfig(length_scale=scale, noise_scale=0.6, noise_w_scale=0.7)
+    # less noise = steadier, more fluent articulation (fewer slurred or wobbly words)
+    cfg = SynthesisConfig(length_scale=scale, noise_scale=0.45, noise_w_scale=0.5)
     v = loaded[voice]
     rate = v.config.sample_rate
     pcm = b""

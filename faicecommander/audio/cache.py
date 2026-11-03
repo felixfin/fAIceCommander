@@ -11,7 +11,7 @@ from scipy.io import wavfile
 from . import sfx_bank, tracks
 from .synth import SR
 
-AUDIO_VERSION = "b1-2"  # bump when the synth code changes to re-render the cache
+AUDIO_VERSION = "b1-3"  # bump when the synth code changes to re-render the cache
 
 
 def cache_dir():

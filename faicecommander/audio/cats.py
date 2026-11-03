@@ -83,14 +83,21 @@ MEOW = [([(0, 450), (0.35, 950), (0.75, 700), (1, 420)], 140, 1.0),
         ([(0, 4300), (1, 4000)], 450, 0.15)]
 
 
+# a clear "mee-AOW": closed "m/i" (low F1, high F2), wide open "a", rounded "ow" (both formants fall)
+MEOW_CLEAR = [([(0, 300), (0.18, 350), (0.42, 950), (0.75, 750), (1, 450)], 110, 1.0),
+              ([(0, 2500), (0.18, 2300), (0.42, 1500), (0.75, 1100), (1, 800)], 180, 0.85),
+              ([(0, 3300), (0.5, 2800), (1, 2600)], 260, 0.4)]
+
+
 def angry_meow(variant=1):
-    """Raider fire: a short, spat 'MRRAOW' with a hiss."""
-    shapes = {1: (0.55, [(0, 380), (0.3, 820), (0.7, 640), (1, 330)]),
-              2: (0.7, [(0, 520), (0.25, 980), (0.55, 900), (1, 380)]),
-              3: (0.48, [(0, 300), (0.4, 700), (1, 260)])}
+    """Raider fire: an unmistakable, angry 'mee-AOW' - mostly tonal, a little rasp, a short spit."""
+    shapes = {1: (0.6, [(0, 560), (0.3, 980), (0.6, 880), (1, 520)]),
+              2: (0.7, [(0, 650), (0.25, 1150), (0.55, 1000), (1, 560)]),
+              3: (0.55, [(0, 480), (0.35, 860), (1, 430)])}
     dur, f0 = shapes[variant]
-    y = voice(dur, f0, MEOW, rough=0.35, sub=0.25, hiss=0.35, attack=0.015, seed=10 + variant)
-    return _out(reverb(y, 0.12, 0.5), 0.85)
+    y = voice(dur, f0, MEOW_CLEAR, rough=0.12, sub=0.08, hiss=0.12, breath=0.02, attack=0.02, release=0.1,
+              seed=10 + variant)
+    return _out(reverb(y, 0.1, 0.5), 0.95)
 
 
 def mother_meow():

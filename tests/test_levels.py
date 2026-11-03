@@ -177,9 +177,9 @@ def test_black_hole_pulls_and_absorbs(world):
 def test_steering_against_a_distant_hole_works(world):
     world.reset()
     ship = world.ship
-    world.spawn_hole(ship.x + 4.5, ship.y + 2.0, 0.0, world.u(18), LV["level_06.hole_pull"])
+    world.spawn_hole(ship.x + 7.0, ship.y + 3.0, 0.0, world.u(18), LV["level_06.hole_pull"])
     x0 = ship.x
-    for _ in range(30):
+    for _ in range(45):
         world.update(DT, Controls(steer=-1.0))
     assert ship.x < x0 and world.death_cause is None
 

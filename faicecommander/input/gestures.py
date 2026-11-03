@@ -86,6 +86,9 @@ class GestureMapper:
         c = cfg["controls"]
         self.deadzone, self.full = c["tilt_deadzone_deg"], c["tilt_full_deg"]
         self.turn_thr, self.turn_rearm, self.turn_lockout = c["turn_threshold"], c["turn_rearm"], c["turn_lockout_s"]
+        self.turn_hold = c.get("turn_hold_s", 0.0)
+        self.turn_tilt_penalty = c.get("turn_tilt_penalty", 0.0)
+        self._turn_held = 0.0
         self.mouth_on, self.mouth_off = c["mouth_open_ratio"], c["mouth_close_ratio"]
         self.eyes_thr = c["eyes_closed_ratio"]
         self.cal = Calibration()
@@ -121,7 +124,13 @@ class GestureMapper:
         ctl.mouth_pressed = self._mouth_open and not was_open
         eyes = (face.blink - cal.blink_open) / max(cal.blink_closed - cal.blink_open, 1e-3)
         ctl.eyes_closed = eyes > self.eyes_thr
-        if self._turn_armed and self._turn_cool <= 0 and abs(turn) > self.turn_thr:
+        # tilting to steer drags the nose sideways a little: demand a clearer turn while tilted
+        thr = self.turn_thr * (1 + self.turn_tilt_penalty * min(1.0, abs(tilt) / self.full))
+        if abs(turn) > thr:
+            self._turn_held += fdt
+        else:
+            self._turn_held = 0.0
+        if self._turn_armed and self._turn_cool <= 0 and abs(turn) > thr and self._turn_held >= self.turn_hold:
             ctl.weapon_step = 1 if turn > 0 else -1
             self._turn_armed = False
             self._turn_cool = self.turn_lockout

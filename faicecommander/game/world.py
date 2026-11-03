@@ -193,7 +193,8 @@ class World:
         drift += sum(r.pull(ship.x) for r in self.raiders if r.alive)
         ship.update(dt, ctl.steer, self.half_width, drift)
         self.weapons.update(dt, ctl, ship, self)
-        ship.hull = min(100.0, ship.hull + self.hull_regen * dt)
+        if self.death_cause is None:  # no repairs once the ship is lost
+            ship.hull = min(100.0, ship.hull + self.hull_regen * dt)
         for b in live(self.bolts):
             b.update(dt)
             if b.y > self.top_y + 2:

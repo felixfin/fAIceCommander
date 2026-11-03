@@ -81,18 +81,18 @@ asteroid_spread_deg = 45
 asteroid_wobble_px = 0
 damage_percent = 25
 raider_waves = [2]            # raiders per wave; the next wave comes when the current one is gone
-raider_toughness = 2.0        # x the hits from [targets.raider]
+raider_toughness = 1.7        # x the hits from [targets.raider]
 raider_speed_px = 220
-raider_fire_interval_s = [1.3, 2.4]
-raider_shot_speed_px = 420
-shot_damage_percent = 10
+raider_fire_interval_s = [2.0, 3.2]
+raider_shot_speed_px = 330    # slow enough to dodge
+shot_damage_percent = 6
 # weapon mix per attack: laser shot / a thrown space mouse / belly roll (tractor pull)
 raider_weapons = { laser = 0.6, mouse = 0.25, belly = 0.15 }
-mouse_speed_px = 200
-mouse_turn_deg = 70           # homing, degrees per second
-mouse_damage_percent = 12
+mouse_speed_px = 170
+mouse_turn_deg = 55           # homing, degrees per second
+mouse_damage_percent = 8
 belly_s = 2.5
-belly_pull_px = 190           # sideways pull on your ship while a raider shows its belly
+belly_pull_px = 150           # sideways pull on your ship while a raider shows its belly
 belly_cooldown_s = 9
 score_per_kill = 100
 score_per_mouse = 50
@@ -115,7 +115,7 @@ hole_chance_per_s = 0.12      # chance per second that a black hole appears
 max_holes = 1
 hole_first_s = 5
 hole_radius_px = [12, 24]     # event horizon (random per hole): touching it means game over
-hole_pull = 55.0              # drift speed = pull * (radius / 18 px)^2 / distance^1.5 (units)
+hole_pull = 120.0             # drift speed = pull * (radius / 18 px)^2 / distance^1.5 (units)
 hole_breathe = 0.15           # the horizon slowly swells and shrinks by this share
 hole_speed_px = [40, 90]      # own approach speed on top of the scroll
 
@@ -148,7 +148,7 @@ bomb_interval_s = [45, 35, 25]  # artificial black hole bombs
 bomb_speed_px = 260
 hole_life_s = 10
 hole_radius_px = 14
-hole_pull = 45.0
+hole_pull = 90.0
 hole_drain_radius_px = 100
 hole_drain_per_s = 5          # hull percent per second while close
 pulse_first_s = 20
@@ -204,18 +204,21 @@ damage_percent = 15
 [medium.level_05]
 asteroid_count = [2, 3]
 raider_waves = [2, 1]
-raider_toughness = 2.4
-raider_fire_interval_s = [1.1, 2.0]
-mouse_speed_px = 230
-belly_pull_px = 220
-belly_cooldown_s = 7
+raider_toughness = 2.0
+raider_fire_interval_s = [1.7, 2.7]
+raider_shot_speed_px = 360
+shot_damage_percent = 7
+mouse_speed_px = 190
+mouse_damage_percent = 9
+belly_pull_px = 175
+belly_cooldown_s = 8
 
 [medium.level_06]
 asteroid_count = 5
 hole_chance_per_s = 0.16
 max_holes = 2
 hole_radius_px = [12, 30]
-hole_pull = 75.0
+hole_pull = 165.0
 asteroid_wobble_px = 40
 
 [medium.level_07]
@@ -270,22 +273,22 @@ damage_percent = 18
 asteroid_count = [2, 4]
 asteroid_wobble_px = 80
 raider_waves = [2, 2]
-raider_toughness = 2.8
-raider_speed_px = 260
-raider_fire_interval_s = [0.9, 1.7]
-raider_shot_speed_px = 480
-shot_damage_percent = 12
-mouse_speed_px = 260
-mouse_damage_percent = 15
-belly_pull_px = 250
-belly_cooldown_s = 6
+raider_toughness = 2.4
+raider_speed_px = 250
+raider_fire_interval_s = [1.3, 2.2]
+raider_shot_speed_px = 420
+shot_damage_percent = 9
+mouse_speed_px = 220
+mouse_damage_percent = 11
+belly_pull_px = 210
+belly_cooldown_s = 7
 
 [hard.level_06]
 asteroid_count = 6
 hole_chance_per_s = 0.2
 max_holes = 2
 hole_radius_px = [14, 34]
-hole_pull = 95.0
+hole_pull = 210.0
 hole_breathe = 0.22
 asteroid_wobble_px = 90
 damage_percent = 30

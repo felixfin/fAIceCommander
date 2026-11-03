@@ -83,17 +83,32 @@ def pitch_down(x, semitones):
     """Lower pitch and formants together (a bigger, darker throat), keeping the duration."""
     r = 2 ** (semitones / 12)
     y = stretch(x, r)
-    return resample_poly(y, 1000, int(round(1000 * r)))[: len(x)]
+    y = resample_poly(y, 1000, int(round(1000 * r)))[: len(x)]
+    return np.pad(y, (0, len(x) - len(y)))
+
+
+def mask(x, delay_ms=2.2, gain=0.3):
+    """A faint resonance like a voice behind a helmet mask (a short feedback comb)."""
+    d = int(delay_ms * SR / 1000)
+    y = x.copy()
+    for i in range(d, len(y), d):
+        k = min(d, len(y) - i)
+        y[i:i + k] += gain * y[i - d:i - d + k]
+    return y * 0.7 + x * 0.3
 
 
 def narrator(x, space=0.16, size=1.3):
-    """Dark, close, cinematic: pitched down, heavy low end, a little grit, compression, dark hall."""
-    x = pitch_down(x, 3.0)
-    x = x + 0.08 * saturate(lp(x, 900), 3.0)  # chest rumble
-    x = lp(x, 7000)
-    x = hp(x, 60)
-    x = x + lp(x, 180) * 0.6            # chest
-    x = x + bp(x, 2500, 5000) * 0.25     # presence
+    """Deep and dark (a hint of Batman and Vader): pitched down 5 semitones, a quiet sub-octave growl,
+    rasp, a faint mask resonance, heavy low end and dark highs, compression, dark hall."""
+    deep = pitch_down(x, 5.0)
+    growl = pitch_down(x, 12.0)                     # an octave below: the gravel under the voice
+    x = deep + 0.16 * saturate(lp(growl, 700), 2.5)
+    x = x + 0.12 * saturate(bp(x, 150, 1200), 4.0)  # rasp
+    x = mask(x)
+    x = lp(x, 5200)
+    x = hp(x, 50)
+    x = x + lp(x, 200) * 0.7            # chest
+    x = x + bp(x, 1800, 3500) * 0.18     # just enough presence to stay intelligible
     x = compress(x)
     x = pad_tail(x, 1.2)
     return fade(reverb(x, mix=space, size=size), 0.002, 0.4)

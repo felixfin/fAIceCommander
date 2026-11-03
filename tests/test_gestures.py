@@ -162,3 +162,20 @@ def test_turning_survives_a_tilted_head():
     straight = FaceTracker._analyse(_face(40, 0), frame, 1).turn
     tilted = FaceTracker._analyse(_face(40, 20), frame, 1).turn
     assert straight > 0.5 and abs(tilted - straight) < 0.02
+
+
+def test_brief_turn_spikes_do_not_switch():
+    g, feed = calibrated()
+    run(g, feed, 10, turn=0.05)
+    steps = [c.weapon_step for c in run(g, feed, 3, turn=0.9)]  # 0.1 s jerk
+    steps += [c.weapon_step for c in run(g, feed, 20, turn=0.05)]
+    assert not any(steps)
+
+
+def test_steering_tilt_raises_the_turn_threshold():
+    g, feed = calibrated()
+    steps = [c.weapon_step for c in run(g, feed, 30, tilt=25.0, turn=0.65)]  # full tilt, nose drifts sideways
+    assert not any(steps)
+    run(g, feed, 20, tilt=2.0, turn=0.05)
+    steps = [c.weapon_step for c in run(g, feed, 30, tilt=2.0, turn=0.65)]  # the same turn, head upright
+    assert steps.count(1) == 1
