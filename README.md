@@ -7,7 +7,7 @@ your mouth to fire - and close your eyes when the hypno pulse comes.
      README on github.com, drag docs/media/fAIceCommander3D_trailer_720p.mp4 into the editor and
      replace the linked poster below with the https://github.com/user-attachments/assets/... line
      GitHub inserts. Until then the poster links to the video file. -->
-[![Watch the trailer](docs/media/poster.jpg)](docs/media/fAIceCommander3D_trailer_720p.mp4)
+[![Watch the trailer](docs/media/poster.jpg)](https://github.com/user-attachments/assets/43a069f0-8cc9-4cb9-b638-2910a9a2740e)
 
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue) ![Panda3D](https://img.shields.io/badge/engine-Panda3D-orange)
 ![MediaPipe](https://img.shields.io/badge/face%20tracking-MediaPipe-green) ![Windows](https://img.shields.io/badge/platform-Windows-lightgrey)
