@@ -87,7 +87,7 @@ CLIPS = [
     (87.5, 2.5, ("card", "YOUR FACE IS THE WEAPON", "tagline"), {}),
 ]
 
-VOICE = [(0.8, "trailer_01"), (19.1, "trailer_02"), (23.9, "trailer_03"), (36.2, "trailer_04"),
+VOICE = [(5.6, "trailer_01"), (19.1, "trailer_02"), (23.9, "trailer_03"), (36.2, "trailer_04"),
          (46.0, "trailer_05"), (84.6, "trailer_06")]
 
 
