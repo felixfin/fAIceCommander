@@ -84,11 +84,11 @@ CLIPS = [
     (81.8, 1.2, ("black",), {}),
     # --- title
     (83.0, 4.5, ("card", "fAIceCommander 3D", "title"), {}),
-    (87.5, 2.5, ("card", "YOUR FACE IS THE WEAPON", "tagline"), {}),
+    (87.5, 2.5, ("card", "YOUR FACE IS A WEAPON", "tagline"), {}),
 ]
 
 VOICE = [(5.6, "trailer_01"), (19.1, "trailer_02"), (23.9, "trailer_03"), (36.2, "trailer_04"),
-         (46.0, "trailer_05"), (84.6, "trailer_06")]
+         (46.0, "trailer_05"), (83.3, "trailer_06"), (87.6, "trailer_07")]
 
 
 def source_ranges(kind, segment=None, pad=0.3):

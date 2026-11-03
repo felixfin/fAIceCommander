@@ -53,7 +53,8 @@ LINES = {
     "trailer_03": ("norman", "They took our names.", 1.15),
     "trailer_04": ("norman", "One commander survived.", 1.15),
     "trailer_05": ("norman", "You are our last hope.", 1.2),
-    "trailer_06": ("norman", "Your face. / Is the weapon.", 1.15),
+    "trailer_06": ("norman", "Face Commander.", 1.15),
+    "trailer_07": ("norman", "Your face is a weapon.", 1.15),
 }
 FILES = {"norman": "en_US-norman-medium", "kristin": "en_US-kristin-medium",
          "ljspeech": "en_US-ljspeech-high", "john": "en_US-john-medium"}
