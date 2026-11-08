@@ -11,7 +11,8 @@ from pathlib import Path
 import numpy as np
 from panda3d.core import (
     ColorBlendAttrib, CardMaker, Filename, Loader, LoaderOptions, Material, Point3, Geom, GeomNode, GeomTriangles,
-    GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath, PNMImage, Texture, TransparencyAttrib,
+    GeomVertexData, GeomVertexFormat, GeomVertexWriter, NodePath, PNMImage, SamplerState, Texture,
+    TransparencyAttrib,
 )
 
 
@@ -22,6 +23,7 @@ def _source_hash():
     pkg = Path(__file__).resolve().parents[1]
     h = hashlib.md5()
     files = [p for d in ("render", "game/entities", "cutscenes") for p in (pkg / d).glob("*.py")]
+    files += list((pkg / "assets" / "cats").glob("*"))  # the photographed cats
     for p in sorted(files):
         h.update(p.read_bytes())
     return h.hexdigest()[:12]
@@ -741,102 +743,6 @@ def hull_paint(z0, z1):
     return f
 
 
-def _fur(base, dark, stripes=True, seed=0):
-    """Vertex colour for fur: soft noise, darker towards the back, tabby stripes and the forehead 'M'."""
-    base, dark = np.array(base), np.array(dark)
-
-    def f(p):
-        x, y, z = p
-        c = base * (1 + 0.18 * _noise(p, 9.0) + 0.08 * _noise(p, 23.0))
-        if stripes:
-            band = math.sin(z * 26 + 3 * math.sin(x * 9 + seed)) * math.cos(x * 4)
-            c = c * (1 - 0.6 * max(0.0, band - 0.2) / 0.8)
-        c = c * (1 - 0.25 * max(0.0, y) / 0.6)
-        return tuple(np.clip(c * 0.6 + dark * 0.4 * (1 - min(1.0, max(0.0, -y + 0.2))), 0, 1))
-    return f
-
-
-def build_catlien(parent, scale=1.0, queen=False):
-    """A Catlien: a big, realistic cat head and shoulders (armour collar, whisker pads, tall tufted ears,
-    almond eyes with slit pupils, whiskers, tabby fur). The queen is black with red eyes. Faces -Y."""
-    root = parent.attachNewNode("catlien")
-    matte = Material("fur")
-    matte.setSpecular((0.05, 0.05, 0.05, 1))
-    matte.setShininess(5)
-    root.setMaterial(matte, 1)
-    if queen:
-        fur = _fur((0.07, 0.065, 0.07), (0.02, 0.02, 0.025), stripes=False)
-        eye_col, iris = (1.0, 0.12, 0.04), (1.0, 0.25, 0.05)
-    else:
-        fur = _fur((0.42, 0.34, 0.26), (0.12, 0.09, 0.07), seed=1)
-        eye_col, iris = (1.0, 0.75, 0.1), (0.85, 0.65, 0.1)
-    light_fur = _fur((0.62, 0.56, 0.48) if not queen else (0.12, 0.11, 0.12), (0.3, 0.27, 0.24), stripes=False)
-    V, F = icosphere(3)
-    head = root.attachNewNode("head")
-    head.setPos(0, 0, 1.05)
-    head.setP(-6)
-    part(head, V * np.array([0.37, 0.36, 0.33]), F, (1, 1, 1), pos=(0, 0.02, 0.02), vcol=fur)       # cranium
-    for sgn in (1, -1):
-        part(head, V * np.array([0.17, 0.16, 0.15]), F, (1, 1, 1), pos=(sgn * 0.24, -0.06, -0.1), vcol=fur)  # cheek ruffs
-        part(head, V * np.array([0.085, 0.075, 0.07]), F, (1, 1, 1), pos=(sgn * 0.065, -0.33, -0.14),
-             vcol=light_fur)                                                                            # whisker pads
-    part(head, V * np.array([0.07, 0.06, 0.05]), F, (1, 1, 1), pos=(0, -0.29, -0.22), vcol=light_fur)  # chin
-    part(head, V * np.array([0.08, 0.12, 0.06]), F, (1, 1, 1), pos=(0, -0.3, -0.01), vcol=fur)         # bridge of the nose
-    nose = [(-0.045, 0.0), (0.045, 0.0), (0.0, -0.045)]
-    Vn, Fn = prism(nose, 0.03)
-    part(head, Vn[:, [0, 2, 1]], Fn, (0.35, 0.18, 0.2) if not queen else (0.08, 0.05, 0.06),
-         pos=(0, -0.4, -0.08), hpr=(0, -30, 0))                                                         # nose leather
-    Vm, Fm = tube_mesh([(-0.06, -0.385, -0.2), (0, -0.4, -0.18), (0.06, -0.385, -0.2)], 0.008, 6)
-    part(head, Vm, Fm, (0.05, 0.03, 0.03), orient=None)                                                 # mouth line
-    for sgn in (1, -1):
-        # ears: tall, slightly turned out, fur outside, pink-grey inside, tufts on the tips
-        ear = head.attachNewNode("ear")
-        ear.setPos(sgn * 0.21, 0.0, 0.24)
-        ear.setHpr(sgn * -10, -15, sgn * 25)
-        Vp, Fp = pyramid([(-0.14, 0.0), (0.14, 0.0), (0.0, 0.08)], (0.0, 0.02, 0.32))
-        part(ear, Vp, Fp, (1, 1, 1), vcol=fur, smooth=None)
-        Vi, Fi = pyramid([(-0.075, -0.01), (0.075, -0.01), (0.0, 0.03)], (0.0, -0.005, 0.24))
-        part(ear, Vi, Fi, (0.45, 0.3, 0.3) if not queen else (0.15, 0.08, 0.09), pos=(0, -0.015, 0.01), smooth=None)
-        Vt, Ft = tube_mesh([(0, 0.02, 0.29), (sgn * 0.01, 0.02, 0.35), (sgn * 0.02, 0.03, 0.4)], 0.008, 5)
-        part(ear, Vt, Ft, (0.1, 0.08, 0.07), orient=None)
-        # eyes: almond shaped, glowing iris with a vertical slit pupil, dark lid rims
-        lens = [(-0.075, 0.0), (-0.03, 0.035), (0.04, 0.04), (0.08, 0.005), (0.035, -0.03), (-0.03, -0.03)]
-        Ve, Fe = prism(lens, 0.02)
-        Ve = Ve * np.array([1.35, 1.35, 1.0])
-        part(head, Ve[:, [0, 2, 1]] * np.array([sgn, 1, 1]), Fe, iris, pos=(sgn * 0.15, -0.3, 0.06),
-             hpr=(sgn * -20, 0, -sgn * 12), unlit=True)
-        Vs, Fs = box(0.014, 0.03, 0.065)
-        part(head, Vs * np.array([1, 1, 1.3]), Fs, (0, 0, 0), pos=(sgn * 0.15, -0.315, 0.06), hpr=(sgn * -20, 0, 0),
-             unlit=True)
-        Vr, Fr = tube_mesh([(sgn * (0.15 + 0.105 * math.cos(a)), -0.305 - 0.01 * math.cos(a), 0.06 + 0.05 * math.sin(a))
-                            for a in np.linspace(0, 2 * math.pi, 14)], 0.008, 5)
-        part(head, Vr, Fr, (0.03, 0.025, 0.025), orient=None)
-        glow(head, (sgn * 0.15, -0.33, 0.06), 0.22, (*eye_col, 0.7))
-        for k in range(4):  # whiskers fanning out from the pads
-            a = math.radians(-20 + k * 12)
-            Vw, Fw = tube_mesh([(sgn * 0.12, -0.36, -0.15 + 0.012 * k),
-                                (sgn * (0.12 + 0.2 * math.cos(a)), -0.37 + 0.05, -0.15 + 0.2 * math.sin(a)),
-                                (sgn * (0.12 + 0.42 * math.cos(a)), -0.3, -0.18 + 0.32 * math.sin(a))], 0.0035, 4)
-            part(head, Vw, Fw, (0.9, 0.88, 0.84), orient=None)
-    # neck fur, shoulders and the armoured collar of the warrior caste
-    part(root, V * np.array([0.28, 0.26, 0.3]), F, (1, 1, 1), pos=(0, 0.06, 0.72), vcol=light_fur)
-    part(root, V * np.array([0.62, 0.36, 0.28]), F, (1, 1, 1), pos=(0, 0.1, 0.4),
-         vcol=paint((0.04, 0.04, 0.05), (0.22, 0.21, 0.22), 0.2, 0.68))
-    Vc, Fc = lathe([(0.27, 0.6), (0.31, 0.68), (0.27, 0.76)], 20, "z")
-    part(root, Vc, Fc, (0.3, 0.07, 0.05) if not queen else (0.35, 0.28, 0.1), orient="z")
-    if queen:
-        for k in range(7):  # a jewelled collar instead of a crown
-            a = math.radians(-150 + k * 20)
-            part(root, V * 0.025, F, (1.0, 0.15, 0.1), pos=(0.3 * math.cos(a), 0.3 * math.sin(a) + 0.05, 0.68),
-                 unlit=True)
-        Vt, Ft = sweep([(-0.2, 0.9, 0.12, 0, 3), (1.9, 0.6, 0.08, 0, 3)], 16, "y")
-        throne = part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(0, 2), name="throne")
-        throne.setP(90)
-        throne.setPos(0, 0.45, -0.1)
-    root.setScale(scale)
-    return root
-
-
 SKIN_TONES = [(0.78, 0.6, 0.5), (0.6, 0.43, 0.32), (0.42, 0.28, 0.2), (0.86, 0.7, 0.6)]
 
 
@@ -908,6 +814,129 @@ def build_human(parent, female=False, skin=0, collar=(1.0, 0.1, 0.05)):
     return root
 
 
+# ---------------------------------------------------------------- photographed Catliens
+
+CAT_LOOKS = {  # grade (shadow tint, highlight tint, exposure, saturation) and eye glow per cat
+    "queen": {"shadow": (0.55, 0.08, 0.06), "light": (1.0, 0.82, 0.7), "exposure": 0.72, "sat": 0.75,
+              "eye": (1.0, 0.25, 0.05)},
+    "raider": {"shadow": (0.25, 0.12, 0.1), "light": (0.95, 0.9, 0.85), "exposure": 0.62, "sat": 0.6,
+               "eye": (0.6, 1.0, 0.3)},
+}
+
+
+def _cat_texture(name):
+    """The photo (assets/cats/<name>.png) graded dark and menacing: lower exposure, crushed blacks, less
+    colour, shadows toned towards the cat's colour. Returns (Texture, alpha array, meta)."""
+    import json
+    import cv2
+    from ..config import ASSETS_DIR
+    look = CAT_LOOKS[name]
+    rgba = cv2.imread(str(ASSETS_DIR / "cats" / f"{name}.png"), cv2.IMREAD_UNCHANGED).astype(np.float32) / 255
+    meta = json.loads((ASSETS_DIR / "cats" / f"{name}.json").read_text())
+    bgr, a = rgba[..., :3], rgba[..., 3]
+    lum = bgr.mean(2, keepdims=True)
+    c = lum + (bgr - lum) * look["sat"]                      # less colour
+    c = np.clip(c * look["exposure"], 0, 1) ** 1.25          # darker, crushed blacks
+    sh, li = np.array(look["shadow"][::-1]), np.array(look["light"][::-1])  # BGR
+    t = np.clip(lum * 1.4, 0, 1)
+    c = c * (sh * (1 - t) + li * t) * 1.15                   # split toning
+    out = np.dstack([np.clip(c, 0, 1), a])
+    h, w = a.shape
+    tex = Texture(f"cat-{name}")
+    tex.setup2dTexture(w, h, Texture.T_unsigned_byte, Texture.F_rgba)
+    tex.setRamImage(np.ascontiguousarray((out[::-1] * 255).astype(np.uint8)).tobytes())
+    tex.setMinfilter(SamplerState.FT_linear_mipmap_linear)
+    tex.setWrapU(SamplerState.WM_clamp)
+    tex.setWrapV(SamplerState.WM_clamp)
+    return tex, a[::-1], meta
+
+
+def build_photo_cat(parent, name, height=2.0, detail="close", depth_scale=0.35):
+    """A Catlien made from a photo of a real cat, facing -Y.
+
+    detail="close": the photo on a relief displaced by its AI depth map (Depth Anything V2, see
+    tools/catphoto) - photoreal from the front and in slow camera moves.
+    detail="small": the photo projected onto a coarse, arched head shape - for tiny views (raider
+    pilots, the Mother on her bridge), where it has to read as a head from above as well.
+    The model's origin is at the bottom centre; eyes glow in the cat's colour."""
+    import cv2
+    from ..config import ASSETS_DIR
+    look = CAT_LOOKS[name]
+    tex, alpha, meta = _cat_texture(name)
+    depth = cv2.imread(str(ASSETS_DIR / "cats" / f"{name}_depth.png"), cv2.IMREAD_UNCHANGED).astype(np.float32)
+    depth = depth[::-1] / 65535
+    aspect = meta["aspect"]
+    width = height * aspect
+    nx, nz = (160, 200) if detail == "close" else (36, 44)
+    hs, ws = depth.shape
+    us, vs = np.linspace(0, 1, nx), np.linspace(0, 1, nz)
+    U, Vv = np.meshgrid(us, vs)
+    px = np.clip((U * (ws - 1)).astype(int), 0, ws - 1)
+    py = np.clip((Vv * (hs - 1)).astype(int), 0, hs - 1)
+    d = cv2.GaussianBlur(depth, (0, 0), 2.0 if detail == "close" else 6.0)[py, px]
+    a = cv2.resize(alpha, (nx, nz), interpolation=cv2.INTER_AREA)
+    X = (U - 0.5) * width
+    Z = Vv * height
+    if detail == "close":
+        Y = -d * depth_scale * height
+    else:  # an arched head: the centre bulges forward, the sides curve back
+        ex = np.mean([e[0] for e in meta["eyes"]]) - 0.5
+        ez = np.mean([e[1] for e in meta["eyes"]])
+        r = np.hypot((U - 0.5 - ex) / 0.55, (Vv - ez) / 0.7)
+        Y = -(np.sqrt(np.clip(1 - r ** 2, 0, 1)) * 0.45 + d * 0.15) * height
+    # normals from the surface (central differences)
+    P = np.stack([X, Y, Z], -1)
+    du = np.gradient(P, axis=1)
+    dv = np.gradient(P, axis=0)
+    N = np.cross(du, dv)
+    N /= np.maximum(np.linalg.norm(N, axis=2, keepdims=True), 1e-9)
+    N[N[..., 1] > 0] *= -1  # facing the camera (-Y)
+    vd = GeomVertexData("photo-cat", GeomVertexFormat.getV3n3t2(), Geom.UHStatic)
+    vd.uncleanSetNumRows(nx * nz)
+    arr = np.concatenate([P.reshape(-1, 3), N.reshape(-1, 3), np.stack([U, Vv], -1).reshape(-1, 2)], 1)
+    vd.modifyArray(0).modifyHandle().copyDataFrom(arr.astype(np.float32).tobytes())
+    prim = GeomTriangles(Geom.UHStatic)
+    keep = a > 0.01
+    cell = height / nz
+    for j in range(nz - 1):
+        for i in range(nx - 1):
+            if not (keep[j, i] or keep[j, i + 1] or keep[j + 1, i] or keep[j + 1, i + 1]):
+                continue  # fully transparent: no triangles
+            quad = Y[j:j + 2, i:i + 2]
+            if quad.max() - quad.min() > 6 * cell:
+                continue  # a steep wall at the silhouette would only show stretched edge pixels
+            k = j * nx + i
+            prim.addVertices(k, k + 1, k + nx + 1)
+            prim.addVertices(k, k + nx + 1, k + nx)
+    g = Geom(vd)
+    g.addPrimitive(prim)
+    gn = GeomNode(f"photo-cat-{name}")
+    gn.addGeom(g)
+    root = parent.attachNewNode("catlien")
+    cat = root.attachNewNode(gn)
+    cat.setTexture(tex)
+    # drawn after the (additive) back lights, so the soft edge blends over them instead of being lit
+    # through; its own eye glows are drawn after it
+    cat.setTransparency(TransparencyAttrib.MAlpha)
+    cat.setBin("fixed", 30)
+    cat.setTwoSided(True)
+    fur = Material("fur")
+    fur.setDiffuse((1, 1, 1, 1))
+    fur.setAmbient((1, 1, 1, 1))
+    fur.setSpecular((0.04, 0.04, 0.04, 1))
+    fur.setShininess(4)
+    cat.setMaterial(fur, 1)
+    for eu, ev in meta["eyes"]:  # glowing eyes, just in front of the photographed ones
+        i, j = int(eu * (nx - 1)), int(ev * (nz - 1))
+        pos = (X[j, i], Y[j, i] - 0.02 * height, Z[j, i])
+        k = 1.0 if detail == "close" else 2.2  # tiny views: the eyes are what you recognise
+        for size, col in ((0.06, (*look["eye"], 0.75)), (0.018, (1.0, 0.95, 0.8, 0.6))):
+            g = glow(root, pos, size * height * k, col)
+            g.setName("eye-glow")
+            g.setBin("fixed", 40)
+    return root
+
+
 RAIDER_BODY = [(1.25, 0.55, 0.15, 0.0, 3.0), (0.95, 0.8, 0.25, 0.02, 3.0), (0.4, 0.82, 0.29, 0.03, 3.0),
                (-0.15, 0.55, 0.25, 0.03, 2.8), (-0.55, 0.22, 0.17, 0.04, 2.4), (-0.95, 0.13, 0.12, 0.05, 2.2),
                (-1.25, 0.14, 0.13, 0.05, 2.2), (-1.45, 0.3, 0.21, 0.06, 2.4), (-1.8, 0.34, 0.24, 0.05, 2.5),
@@ -956,7 +985,9 @@ def build_fighter(parent):
         part(root, Vr, Fr, (1.0, 0.4, 0.95), pos=(0, 0.35, 0), unlit=True, orient=None, two_sided=True)
     glow(root, (0, 0.35, -0.3), 0.7, (1.0, 0.35, 0.95, 0.8))
     # command pod: red-lit canopy with the Catlien pilot inside
-    build_catlien(root, 0.15, queen=False).setPos(0, -1.74, 0.2)
+    pilot = build_photo_cat(root, "raider", height=0.3, detail="small")  # the pilot: a real cat
+    pilot.setPos(0, -1.8, 0.1)
+    pilot.setP(-40)  # leaning back in the seat, looking up at you
     glow(root, (0, -1.5, 0.36), 0.5, (1.0, 0.08, 0.04, 0.55))  # red backlight: pilot reads as a silhouette
     Vh, Fh = hemisphere(3)
     part(root, Vh * np.array([0.21, 0.32, 0.2]), Fh, (0.9, 0.3, 0.2, 0.16), pos=(0, -1.75, 0.27),
@@ -1080,7 +1111,9 @@ def build_mothership(parent, width=14.0):
              (-1.3, 0.4 * s, 0.35, 1.9, 2.5)]
     Vt, Ft = sweep(tower, 32)
     part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(1.4, 2.7))
-    build_catlien(root, 0.5, queen=True).setPos(0, -1.1, 2.02)
+    mother = build_photo_cat(root, "queen", height=0.85, detail="small")  # the Mother herself
+    mother.setPos(0, -1.15, 1.95)
+    mother.setP(-20)
     glow(root, (0, -0.55, 2.45), 1.5, (1.0, 0.06, 0.03, 0.6))  # backlit throne
     Vh, Fh = hemisphere(3)
     part(root, Vh * np.array([0.62 * s, 0.7, 0.85]), Fh, (0.9, 0.3, 0.2, 0.15), pos=(0, -1.25, 2.2),

@@ -153,9 +153,8 @@ def _slaves(root, app):
         tag(root, ("FEMALE " if female else "MALE ") + ("4471", "0932", "1187", "5530", "2206", "0019")[i],
             (x, 1.1, 1.95), 0.15)
         people.append(h)
-    master = catlien(root, 2.0)
-    master.setPos(0, 4.4, 0.3)
-    master.setLightOff(1)
+    master = catlien(root, 2.4)
+    master.setPos(0, 4.6, 0.1)
     for x in (-3.0, -1.8, -0.6, 0.6, 1.8, 3.0):  # leashes from the collars to the master's claw
         Vt, Ft = M.tube_mesh([(x, 1.5, 1.36), (x * 0.6, 2.6, 0.7), (x * 0.15, 3.6, 1.1), (0.35, 3.9, 1.5)], 0.012, 6)
         M.part(root, Vt, Ft, (0.05, 0.05, 0.05), orient=None)
@@ -220,13 +219,9 @@ def _mother_update(t, dt, s, app):
 def _queen(root, app):
     app.backdrop.set_visible(False)
     queen = catlien(root, 2.4, queen=True)
-    queen.setPos(0, 0.8, -1.6)
-    Vh, Fh = M.hemisphere(3)
-    M.part(root, Vh * np.array([2.2, 1.6, 2.6]), Fh, (0.9, 0.3, 0.2, 0.12), pos=(0, 0.2, -0.6),
-           alpha=True, two_sided=True, hpr=(0, -15, 0))
-    backlight(root, (0, 3.5, 1.5), 7.0, (0.9, 0.04, 0.02, 0.5))
-    queen.find("**/throne").hide()
-    eyes = [g for g in queen.findAllMatches("**/glow")]
+    queen.setPos(0, 0.8, -1.0)
+    backlight(root, (0, 3.5, 1.2), 7.0, (0.9, 0.04, 0.02, 0.5))  # red light behind her: a halo round the fur
+    eyes = list(queen.findAllMatches("**/eye-glow"))
     for g in eyes:
         g.setAlphaScale(0.0)
     return {"eyes": eyes, "woke": False, "rng": np.random.default_rng(9)}

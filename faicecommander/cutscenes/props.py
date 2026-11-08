@@ -198,7 +198,9 @@ def human(root, pos, female=False, collar=(1.0, 0.1, 0.05), skin=None):
 
 
 def catlien(root, scale=1.0, queen=False):
-    node = cached_copy(root, f"catlien-{int(queen)}", lambda r: M.build_catlien(r, 1.0, queen=queen))
+    """A photographed cat as a relief (close-ups): the queen is CatQueen, everyone else CatRaider."""
+    name = "queen" if queen else "raider"
+    node = cached_copy(root, f"photo-cat-{name}", lambda r: M.build_photo_cat(r, name, height=1.25, detail="close"))
     node.setScale(scale)
     return node
 

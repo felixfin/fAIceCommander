@@ -6,3 +6,7 @@ tools/voice/models/
 tools/voice/raw/
 recordings/
 build/
+tools/catphoto/.venv/
+tools/catphoto/models/
+tools/catphoto/work/
+photos
