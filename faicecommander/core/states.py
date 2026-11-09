@@ -35,6 +35,7 @@ class State:
 class _CutsceneState(State):
     cinematic = True
     make = None
+    skippable = True  # off for offline renders (tools/trailer): a recorded open mouth must not skip
 
     def enter(self):
         self.app.hud.message()
@@ -46,7 +47,8 @@ class _CutsceneState(State):
 
     def update(self, dt, face, ctl):
         self.held = self.held + dt if ctl.mouth_open else 0.0
-        if self.app.skip_requested() or (ctl.mouth_pressed and not self.app.tracker_ok) or self.held > 1.2:
+        skip = self.app.skip_requested() or (ctl.mouth_pressed and not self.app.tracker_ok) or self.held > 1.2
+        if skip and self.skippable:
             self.scene.skip()
         self.scene.update(dt)
         if self.scene.done:

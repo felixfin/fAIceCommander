@@ -24,6 +24,7 @@ def _source_hash():
     h = hashlib.md5()
     files = [p for d in ("render", "game/entities", "cutscenes") for p in (pkg / d).glob("*.py")]
     files += list((pkg / "assets" / "cats").glob("*"))  # the photographed cats
+    files += list((pkg / "assets" / "humans").glob("*"))  # the baked human bodies
     for p in sorted(files):
         h.update(p.read_bytes())
     return h.hexdigest()[:12]
@@ -851,30 +852,25 @@ def _cat_texture(name):
     return tex, a[::-1], meta
 
 
-def build_photo_cat(parent, name, height=2.0, detail="close", depth_scale=0.35):
-    """A Catlien made from a photo of a real cat, facing -Y.
-
-    detail="close": the photo on a relief displaced by its AI depth map (Depth Anything V2, see
-    tools/catphoto) - photoreal from the front and in slow camera moves.
-    detail="small": the photo projected onto a coarse, arched head shape - for tiny views (raider
-    pilots, the Mother on her bridge), where it has to read as a head from above as well.
-    The model's origin is at the bottom centre; eyes glow in the cat's colour."""
+def cat_grid(name, height, detail="close", depth_scale=0.35, alpha=None):
+    """The photo cat's surface as grids (X, Y, Z, U, V, alpha), shared by the model and by the helmet
+    fitting (render/catliens.py)."""
+    import json
     import cv2
     from ..config import ASSETS_DIR
-    look = CAT_LOOKS[name]
-    tex, alpha, meta = _cat_texture(name)
+    meta = json.loads((ASSETS_DIR / "cats" / f"{name}.json").read_text())
+    if alpha is None:
+        alpha = cv2.imread(str(ASSETS_DIR / "cats" / f"{name}.png"), cv2.IMREAD_UNCHANGED)[..., 3][::-1] / 255.0
     depth = cv2.imread(str(ASSETS_DIR / "cats" / f"{name}_depth.png"), cv2.IMREAD_UNCHANGED).astype(np.float32)
     depth = depth[::-1] / 65535
-    aspect = meta["aspect"]
-    width = height * aspect
+    width = height * meta["aspect"]
     nx, nz = (160, 200) if detail == "close" else (36, 44)
     hs, ws = depth.shape
-    us, vs = np.linspace(0, 1, nx), np.linspace(0, 1, nz)
-    U, Vv = np.meshgrid(us, vs)
+    U, Vv = np.meshgrid(np.linspace(0, 1, nx), np.linspace(0, 1, nz))
     px = np.clip((U * (ws - 1)).astype(int), 0, ws - 1)
     py = np.clip((Vv * (hs - 1)).astype(int), 0, hs - 1)
     d = cv2.GaussianBlur(depth, (0, 0), 2.0 if detail == "close" else 6.0)[py, px]
-    a = cv2.resize(alpha, (nx, nz), interpolation=cv2.INTER_AREA)
+    a = cv2.resize(np.asarray(alpha, np.float32), (nx, nz), interpolation=cv2.INTER_AREA)
     X = (U - 0.5) * width
     Z = Vv * height
     if detail == "close":
@@ -884,6 +880,21 @@ def build_photo_cat(parent, name, height=2.0, detail="close", depth_scale=0.35):
         ez = np.mean([e[1] for e in meta["eyes"]])
         r = np.hypot((U - 0.5 - ex) / 0.55, (Vv - ez) / 0.7)
         Y = -(np.sqrt(np.clip(1 - r ** 2, 0, 1)) * 0.45 + d * 0.15) * height
+    return X, Y, Z, U, Vv, a
+
+
+def build_photo_cat(parent, name, height=2.0, detail="close", depth_scale=0.35):
+    """A Catlien made from a photo of a real cat, facing -Y.
+
+    detail="close": the photo on a relief displaced by its AI depth map (Depth Anything V2, see
+    tools/catphoto) - photoreal from the front and in slow camera moves.
+    detail="small": the photo projected onto a coarse, arched head shape - for tiny views (raider
+    pilots, the Mother on her bridge), where it has to read as a head from above as well.
+    The model's origin is at the bottom centre; eyes glow in the cat's colour."""
+    look = CAT_LOOKS[name]
+    tex, alpha, meta = _cat_texture(name)
+    X, Y, Z, U, Vv, a = cat_grid(name, height, detail, depth_scale, alpha)
+    nz, nx = X.shape
     # normals from the surface (central differences)
     P = np.stack([X, Y, Z], -1)
     du = np.gradient(P, axis=1)
@@ -985,7 +996,8 @@ def build_fighter(parent):
         part(root, Vr, Fr, (1.0, 0.4, 0.95), pos=(0, 0.35, 0), unlit=True, orient=None, two_sided=True)
     glow(root, (0, 0.35, -0.3), 0.7, (1.0, 0.35, 0.95, 0.8))
     # command pod: red-lit canopy with the Catlien pilot inside
-    pilot = build_photo_cat(root, "raider", height=0.3, detail="small")  # the pilot: a real cat
+    from .catliens import build_catlien
+    pilot = build_catlien(root, "raider", height=0.3, detail="small")  # the pilot: a real cat in a helmet
     pilot.setPos(0, -1.8, 0.1)
     pilot.setP(-40)  # leaning back in the seat, looking up at you
     glow(root, (0, -1.5, 0.36), 0.5, (1.0, 0.08, 0.04, 0.55))  # red backlight: pilot reads as a silhouette
@@ -1111,7 +1123,8 @@ def build_mothership(parent, width=14.0):
              (-1.3, 0.4 * s, 0.35, 1.9, 2.5)]
     Vt, Ft = sweep(tower, 32)
     part(root, Vt, Ft, (1, 1, 1), orient=None, vcol=hull_paint(1.4, 2.7))
-    mother = build_photo_cat(root, "queen", height=0.85, detail="small")  # the Mother herself
+    from .catliens import build_catlien
+    mother = build_catlien(root, "queen", height=0.85, detail="small")  # the Mother herself, helmeted
     mother.setPos(0, -1.15, 1.95)
     mother.setP(-20)
     glow(root, (0, -0.55, 2.45), 1.5, (1.0, 0.06, 0.03, 0.6))  # backlit throne

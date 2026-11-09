@@ -7,13 +7,14 @@ import math
 
 import numpy as np
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import NodePath, TextNode
+from panda3d.core import AmbientLight, DirectionalLight, Material, NodePath, Point3, PointLight, TextNode
 
-from ..render import models as M
+from ..render import humans, models as M
 from .engine import Cutscene, Line, Shot
 from .props import (
-    Booms, Drifters, RobotArm, backlight, beam, brain_jar, burning_planet, cached_copy, catlien, empty_ship,
-    escape_pod, hangar, human, human_ship, lerp, look, operating_table, shake, slave_hall, smoke, tag,
+    QUEEN_LIFT, Booms, Drifters, RobotArm, backlight, beam, brain_jar, burning_planet, cached_copy, catlien, dais,
+    empty_ship, escape_pod, hangar, human, human_ship, lerp, look, mother_mech, operating_table, shake, slave_hall,
+    smoke, stasis_tube, tag,
 )
 from .props import brain as props_brain, helmet as props_helmet
 from .timeline import INTRO
@@ -98,8 +99,10 @@ def _planet(root, app):
         r = app.world.raider_tpl.store.copyTo(root)
         r.setScale(1.6)
         r.setPos(-48 + k * 2.4 + rng.uniform(-1, 1), 2 + (k % 3) * 4 + rng.uniform(-1, 1), 2 + rng.uniform(-1, 3))
-        r.setH(-100 + rng.uniform(-8, 8))
-        swarm.append((r, rng.uniform(5.5, 8.0)))
+        yaw = 8 + rng.uniform(-3, 3)  # nose first, turning in on the planet for the attack run
+        r.setHpr(90 + yaw, 4, -14 + rng.uniform(-4, 4))
+        d = np.array([math.cos(math.radians(yaw)), math.sin(math.radians(yaw)), -0.07])
+        swarm.append((r, rng.uniform(5.5, 8.0) * d))
     embers = Drifters(root, 50, (-12, 0, -4), (12, 25, 8), (0.5, -4, 1.2), (1.0, 0.45, 0.1, 0.8), (0.04, 0.12),
                       seed=3, flicker=0.6)
     return {"root": root, "planet": planet, "swarm": swarm, "embers": embers, "rng": rng, "fire": 0.0, "hits": []}
@@ -109,13 +112,13 @@ def _planet_update(t, dt, s, app):
     s["planet"].setH(t * 2.5)
     s["embers"].update(dt, t)
     for r, v in s["swarm"]:
-        r.setX(r.getX() + v * dt)
-        r.setZ(r.getZ() - v * dt * 0.08)
+        r.setPos(r.getPos() + tuple(v * dt))
     s["fire"] -= dt
     rng = s["rng"]
     if s["fire"] <= 0 and t > 2.0:  # orbital bombardment: a beam from the swarm, a flash on the surface
         s["fire"] = 0.35
-        src = s["swarm"][int(rng.integers(len(s["swarm"])))][0].getPos(s["root"])
+        ship = s["swarm"][int(rng.integers(len(s["swarm"])))][0]  # from one of its wingtip cannons
+        src = s["root"].getRelativePoint(ship, Point3(float(rng.choice((-2.0, 2.0))), -0.9, -0.62))
         d = rng.normal(size=3)
         d[1] = -abs(d[1]) - 0.5
         d /= np.linalg.norm(d)
@@ -139,27 +142,71 @@ def _planet_update(t, dt, s, app):
 
 # ---------------------------------------------------------------- 3 slaves
 
+SLAVES = [(False, 0, -1.5), (True, 1, -0.5), (False, 4, 0.5), (True, 3, 1.5)]  # female, tone, x
+TUBES = [(True, 0, (-2.5, 2.1), 30), (False, 1, (-2.9, 3.7), 40), (False, 2, (2.6, 2.4), -32)]
+MOTHER_AT = (0.0, 3.4)
+
+
 def _slaves(root, app):
     app.backdrop.set_visible(False)
     hall = root.attachNewNode("hall")
     slave_hall(hall)
-    backlight(root, (0, 12, 2.5), 14.0)
-    backlight(root, (0, 5, 1.2), 6.0, (0.7, 0.02, 0.02, 0.3))
+    # her own light: almost dark, a hard red light behind her, the tubes glow green
+    root.setLightOff(1)
+    amb = root.attachNewNode(AmbientLight("amb"))
+    amb.node().setColor((0.035, 0.03, 0.035, 1))
+    fill = root.attachNewNode(DirectionalLight("fill"))
+    fill.node().setColor((0.12, 0.12, 0.16, 1))
+    fill.setHpr(-20, -30, 0)
+    back = root.attachNewNode(DirectionalLight("back"))
+    back.node().setColor((4.5, 0.45, 0.22, 1))
+    back.setHpr(180, -12, 0)
+    lamp = root.attachNewNode(PointLight("lamp"))
+    lamp.node().setColor((1.4, 0.25, 0.15, 1))
+    lamp.node().setAttenuation((1, 0.1, 0.05))
+    lamp.setPos(0, 2.2, 2.3)
+    lights = [amb, fill, back, lamp]
+    for female, tone, (x, y), h in TUBES:
+        tube = stasis_tube(root, (x, y, 0.0), female, tone, h)
+        gl = root.attachNewNode(PointLight("tube"))
+        gl.node().setColor((0.25, 1.1, 0.6, 1))
+        gl.node().setAttenuation((1, 0.6, 2.2))
+        gl.setPos(x - 0.25 * (1 if x > 0 else -1), y - 0.35, 1.2)
+        lights.append(gl)
+        body = tube.find("**/human")  # inside the tube only the green glow (red light would stain the rags)
+        body.setLightOff(3)
+        for light in (amb, gl):
+            body.setLight(light, 4)
+    for light in lights:
+        root.setLight(light, 2)
+    backlight(root, (0, 6.5, 2.6), 7.5, (0.9, 0.05, 0.03, 0.5))
+    steps = root.attachNewNode("dais")
+    steps.setPos(MOTHER_AT[0], MOTHER_AT[1] + 0.2, -0.05)
+    top = dais(steps) - 0.05
+    matte = Material("matte")  # no glare of the back light on floor and steps
+    matte.setSpecular((0, 0, 0, 1))
+    for n in (hall, steps):
+        n.setMaterial(matte, 3)
+    mother = mother_mech(root)
+    mother.setPos(MOTHER_AT[0], MOTHER_AT[1] + 0.2, top)
+    claw = (0.0, 3.1, top + QUEEN_LIFT + 0.1)
+    glare = root.attachNewNode(DirectionalLight("glare"))  # red glare of the hall on their backs
+    glare.node().setColor((1.2, 0.13, 0.07, 1))
+    glare.setHpr(15, -28, 0)
     people = []
-    for i, (x, female) in enumerate(((-3.0, False), (-1.8, True), (-0.6, False), (0.6, True), (1.8, False),
-                                     (3.0, True))):
-        h = human(root, (x, 1.5, 0), female)
-        h.setH(180 + (i - 2.5) * 4)
-        tag(root, ("FEMALE " if female else "MALE ") + ("4471", "0932", "1187", "5530", "2206", "0019")[i],
-            (x, 1.1, 1.95), 0.15)
+    for i, (female, tone, x) in enumerate(SLAVES):
+        h = human(root, (x, 1.4, 0), female, tone)
+        h.setH(180 + x * 4)
+        h.setColorScale(0.45, 0.38, 0.4, 1)  # mostly silhouette; the red light draws the edges
+        h.setLight(glare, 3)
+        n = root.getRelativePoint(h, Point3(*humans.neck(female, tone, "broken")))
+        tag(root, ("FEMALE " if female else "MALE ") + ("4471", "0932", "1187", "5530")[i], (x, 1.3, 1.9), 0.13)
+        M.tube(root, [(n[0], n[1], n[2] - 0.03), (n[0] * 0.7, n[1] + 0.6, n[2] - 0.35),
+                      (claw[0] + x * 0.15, claw[1] - 0.6, claw[2] - 0.2), claw], 0.008, (0.08, 0.07, 0.07))
         people.append(h)
-    master = catlien(root, 2.4)
-    master.setPos(0, 4.6, 0.1)
-    for x in (-3.0, -1.8, -0.6, 0.6, 1.8, 3.0):  # leashes from the collars to the master's claw
-        Vt, Ft = M.tube_mesh([(x, 1.5, 1.36), (x * 0.6, 2.6, 0.7), (x * 0.15, 3.6, 1.1), (0.35, 3.9, 1.5)], 0.012, 6)
-        M.part(root, Vt, Ft, (0.05, 0.05, 0.05), orient=None)
     dust = Drifters(root, 60, (-5, -2, 0), (5, 8, 4), (0.1, 0, 0.15), (1.0, 0.5, 0.4, 0.3), (0.015, 0.04), seed=4)
-    return {"people": people, "dust": dust, "strike": 3.2, "rng": np.random.default_rng(7)}
+    return {"people": people, "dust": dust, "strike": 3.2, "rng": np.random.default_rng(7),
+            "eyes": list(mother.findAllMatches("**/eye-glow"))}
 
 
 def _slaves_update(t, dt, s, app):
@@ -172,7 +219,9 @@ def _slaves_update(t, dt, s, app):
         app.cinema.flicker(0.85)
         app.flash.trigger(0.55, (0.8, 0.85, 1.0))
         app.audio.sfx.play("thunder", 0.6)
-    look(app, lerp((0.4, -6.0, 0.9), (-0.3, -2.6, 1.3), t / 12.5), (0, 3.0, 1.4))
+    for g in s["eyes"]:  # her eyes smoulder
+        g.setAlphaScale(0.75 + 0.25 * math.sin(t * 2.3))
+    look(app, lerp((0.6, -6.2, 1.85), (-0.25, -3.9, 1.75), t / 12.5), (0, 2.6, 2.05))
 
 
 # ---------------------------------------------------------------- 4 the Mother

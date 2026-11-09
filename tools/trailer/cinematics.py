@@ -38,6 +38,7 @@ def render(sequence, ranges, out_dir, face_folder, step=1 / 48, size=(1920, 1080
     clock = ClockObject.getGlobalClock()
     clock.setMode(ClockObject.MNonRealTime)
     app.change(states.IntroState if sequence == "intro" else states.OutroState(app, preview=True))
+    app.state.skippable = False
     scene = app.state.scene
     log = SfxLog(app.audio, lambda: scene.t)
     end = max(t1 for _, t1 in ranges)

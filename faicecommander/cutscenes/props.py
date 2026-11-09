@@ -185,24 +185,63 @@ def _burning_planet(root, radius):
     return planet
 
 
-def human(root, pos, female=False, collar=(1.0, 0.1, 0.05), skin=None):
-    """A man or a woman with a slave collar (cached models; skin tone varies along the row)."""
-    if skin is None:
-        skin = int(abs(pos[0]) * 7 + pos[1] * 3) % len(M.SKIN_TONES)
-    key = "-".join(f"{c:.2f}" for c in collar)
-    node = cached_copy(root, f"human-{int(female)}-{skin}-{key}",
-                       lambda r: M.build_human(r, female=female, skin=skin, collar=collar))
+def human(root, pos, female=False, tone=None, pose="broken", collar="slave"):
+    """A realistic man or woman (render/humans.py, cached per look). tone: skin tone index (varies along
+    the row when None); pose: broken / upright / cheer; collar: slave / dead / None."""
+    from ..render import humans
+    if tone is None:
+        tone = int(abs(pos[0]) * 7 + pos[1] * 3) % len(humans.TONES)
+    seed = 3 + tone * 2 + int(female)
+    node = cached_copy(root, f"human-{int(female)}-{tone}-{pose}-{collar}",
+                       lambda r: humans.build_human(r, female, tone, pose, collar, dirt=0.35 if pose == "broken" else 0.15,
+                                                    seed=seed))
     node.setPos(*pos)
-    node.setColorScale(0.8, 0.75, 0.75, 1)  # dim, unhealthy light
+    return node
+
+
+def stasis_tube(root, pos, female, tone, h=0.0):
+    """A human floating in a tube of green fluid (cached per look)."""
+    from ..render import humans
+    node = cached_copy(root, f"stasis-{int(female)}-{tone}-{h:g}",
+                       lambda r: humans.build_stasis_tube(r, female, tone, h, seed=11 + tone))
+    node.setPos(*pos)
     return node
 
 
 def catlien(root, scale=1.0, queen=False):
-    """A photographed cat as a relief (close-ups): the queen is CatQueen, everyone else CatRaider."""
+    """A photographed cat in its helmet, as a relief (close-ups): the queen is CatQueen, others CatRaider."""
+    from ..render import catliens
     name = "queen" if queen else "raider"
-    node = cached_copy(root, f"photo-cat-{name}", lambda r: M.build_photo_cat(r, name, height=1.25, detail="close"))
+    node = cached_copy(root, f"catlien-{name}", lambda r: catliens.build_catlien(r, name, 1.25))
     node.setScale(scale)
     return node
+
+
+QUEEN_LIFT = 1.16  # the Mother on her mech: the bust sits this high above the feet
+
+
+def mother_mech(root):
+    """The Mother in her hall: helmeted bust with an armoured gorget on a three-legged mech; origin under
+    her feet (cached)."""
+    return cached_copy(root, "mother-mech", _mother_mech)
+
+
+def _mother_mech(root):
+    from ..render import catliens
+    s = 0.85
+    queen = catliens.build_catlien(root, "queen", 3.0, armour=True)
+    f = catliens.face("queen", 3.0)
+    queen.setScale(s)
+    queen.setPos(-f["cx"] * s, 0.0, QUEEN_LIFT)
+    catliens.mech_legs(root, (0.0, 0.22, QUEEN_LIFT + 0.12), 0.0, catliens.ACCENT["queen"])
+
+
+def dais(root, steps=((2.1, 0.0), (1.75, 0.32)), color=(0.07, 0.055, 0.055)):
+    """Round dark steps; returns the height of the top."""
+    for r, h in steps:
+        V, F = M.lathe([(r, h - 0.05), (r, h + 0.27), (0.0, h + 0.27)], 32, "z")
+        M.part(root, V, F, color, orient="z")
+    return steps[-1][1] + 0.27
 
 
 def helmet(root):
@@ -217,7 +256,7 @@ def tag(root, text, pos, scale=0.18, color=(1, 0.35, 0.3, 1)):
     np_ = root.attachNewNode(tn)
     np_.setPos(*pos)
     np_.setScale(scale)
-    np_.setLightOff(1)
+    np_.setLightOff(10)  # also in shots that bring their own lights
     np_.setBillboardPointEye()
     return np_
 

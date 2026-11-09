@@ -111,7 +111,8 @@ def _chaos_update(t, dt, s, app):
 def _collars(root, app):
     app.backdrop.set_visible(False)
     backlight(root, (0, 7, 2.0), 11.0, (1.0, 0.65, 0.3, 0.45))  # dawn instead of red
-    people = [human(root, (x, 1.0, 0), female=i % 2 == 1) for i, x in enumerate((-3.0, -1.8, -0.6, 0.6, 1.8, 3.0))]
+    people = [human(root, (x, 1.0, 0), female=i % 2 == 1, tone=i % 5, pose="upright")
+              for i, x in enumerate((-3.0, -1.8, -0.6, 0.6, 1.8, 3.0))]
     collars = [p.find("**/collar") for p in people]
     for p in people:
         p.setH(180)
@@ -143,8 +144,8 @@ def _city(root, rng):
     cached_copy(root, "city", lambda r: _towers(r, np.random.default_rng(10)))
     crowd = []
     for k in range(40):
-        h = human(root, (rng.uniform(-9, 9), rng.uniform(2.0, 6.0), 0), female=k % 2 == 1, collar=(0.15, 0.15, 0.15),
-                  skin=k % len(M.SKIN_TONES))
+        h = human(root, (rng.uniform(-9, 9), rng.uniform(2.0, 6.0), 0), female=k % 2 == 1, tone=k % 5,
+                  pose="cheer" if k % 3 else "upright", collar=None)
         h.setH(180 + rng.uniform(-30, 30))
         crowd.append((h, rng.uniform(0, 6.3), rng.uniform(4, 7)))
     return crowd
